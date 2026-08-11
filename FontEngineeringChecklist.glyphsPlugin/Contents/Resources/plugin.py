@@ -90,16 +90,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 			minSize=(400, 320), maxSize=(400, 1600),
 			autosaveName=USERDATA_KEY + ".mainWindow",
 		)
-		self.w.fontName = vanilla.TextBox((MARGIN, 10, -60, 16), "", sizeStyle="small")
-		self.w.editButton = vanilla.Button(
-			(-55, 8, 40, 18), "Edit", sizeStyle="small", callback=self.toggleEditMode)
-		self.w.editButton.getNSButton().setBordered_(False)
+		self.w.fontName = vanilla.TextBox((MARGIN, 10, -MARGIN, 16), "", sizeStyle="small")
 		self.w.progressBar = vanilla.ProgressBar((MARGIN, 33, -110, 12), minValue=0, maxValue=100)
 		self.w.progressText = vanilla.TextBox((-105, 31, -MARGIN, 16), "", sizeStyle="small")
 		self.w.topDivider = vanilla.HorizontalLine((0, 53, -0, 1))
 		self.w.bottomDivider = vanilla.HorizontalLine((0, -43, -0, 1))
 		self.w.addButton = vanilla.Button(
 			(MARGIN, -33, 90, 20), "＋ Add Check", sizeStyle="small", callback=self.openAddSheet)
+		self.w.editButton = vanilla.Button(
+			(-60, -32, 45, 18), "Edit", sizeStyle="small", callback=self.toggleEditMode)
+		self.w.editButton.getNSButton().setBordered_(False)
 
 		self.rebuildList()
 		self.updateHeader()
@@ -255,10 +255,12 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def eyeImage(self, visible):
-		if hasattr(NSImage, "imageWithSystemSymbolName_accessibilityDescription_"):
-			name = "eye" if visible else "eye.slash"
-			return NSImage.imageWithSystemSymbolName_accessibilityDescription_(name, None)
-		return None
+		# The same template images Glyphs' own Layers palette uses.
+		image = NSImage.imageNamed_("GSVisibleTemplate" if visible else "GSInvisibleTemplate")
+		if image is None and hasattr(NSImage, "imageWithSystemSymbolName_accessibilityDescription_"):
+			image = NSImage.imageWithSystemSymbolName_accessibilityDescription_(
+				"eye" if visible else "eye.slash", None)
+		return image
 
 	@objc.python_method
 	def checkToggled(self, sender, checkId):
