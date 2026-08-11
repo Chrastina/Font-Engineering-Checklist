@@ -47,7 +47,7 @@ HEADER_HEIGHT = 28
 
 NS_VIEW_WIDTH_SIZABLE = 2
 NS_BEZEL_DISCLOSURE = 5
-NS_BUTTON_TYPE_ONOFF = 2
+NS_BUTTON_TYPE_PUSHONPUSHOFF = 1
 
 
 # A flipped document view keeps short content pinned to the top of the scroll
@@ -119,6 +119,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		Glyphs.addCallback(self.documentChanged, DOCUMENTACTIVATED)
 		Glyphs.addCallback(self.documentChanged, DOCUMENTCLOSED)
 		self.w.bind("close", self.windowClosed)
+		self.w.bind("resize", self.syncContentWidth)
 		self.w.open()
 
 	@objc.python_method
@@ -212,9 +213,10 @@ class FontEngineeringChecklist(GeneralPlugin):
 			)
 			discloseNSButton = disclose.getNSButton()
 			discloseNSButton.setTitle_("")
-			# Type must be set before the bezel style, otherwise the
-			# open/closed state never renders on the triangle.
-			discloseNSButton.setButtonType_(NS_BUTTON_TYPE_ONOFF)
+			# The AppKit disclosure recipe: push-on-push-off type first, then
+			# the disclosure bezel — any other type ignores the state and
+			# always draws the closed triangle.
+			discloseNSButton.setButtonType_(NS_BUTTON_TYPE_PUSHONPUSHOFF)
 			discloseNSButton.setBezelStyle_(NS_BEZEL_DISCLOSURE)
 			discloseNSButton.setState_(0 if isCollapsed else 1)
 			setattr(group, "disclose_%s" % safeCat, disclose)
@@ -264,15 +266,27 @@ class FontEngineeringChecklist(GeneralPlugin):
 		# Overlay scrollers: transparent, no white track, and they reserve no
 		# layout width.
 		nsScrollView.setScrollerStyle_(1)
-		# Sync the content width to the actually visible area — with legacy
-		# scrollers the clip view is narrower than the window, and the
-		# right-anchored column must track the clip edge, not the window edge.
-		clipWidth = nsScrollView.contentView().frame().size.width
-		if clipWidth and int(clipWidth) != int(contentWidth):
-			documentView.setFrameSize_((clipWidth, height))
+		self.syncContentWidth()
 		if scrollY:
 			documentView.scrollPoint_((0, scrollY))
 		self.updateCounts()
+
+	@objc.python_method
+	def syncContentWidth(self, sender=None):
+		# The clip view does NOT autoresize its document view when the window
+		# resizes — this syncs the content width, and the autoresizing masks
+		# inside take care of the right-anchored controls.
+		if getattr(self, "w", None) is None or not hasattr(self.w, "scroll"):
+			return
+		try:
+			nsScrollView = self.w.scroll.getNSScrollView()
+			clipSize = nsScrollView.contentView().frame().size
+			documentView = nsScrollView.documentView()
+			docSize = documentView.frame().size
+			if int(docSize.width) != int(clipSize.width):
+				documentView.setFrameSize_((clipSize.width, docSize.height))
+		except Exception:
+			pass
 
 	@objc.python_method
 	def buildRow(self, group, check, states, font, hidden, y):
