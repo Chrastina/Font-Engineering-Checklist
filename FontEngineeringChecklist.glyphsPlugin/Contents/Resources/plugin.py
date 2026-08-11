@@ -21,7 +21,7 @@ from GlyphsApp.plugins import GeneralPlugin
 from AppKit import (
 	NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont,
 	NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName,
-	NSButton, NSCursor, NSBezierPath, NSNotificationCenter,
+	NSButton, NSCursor, NSBezierPath, NSNotificationCenter, NSObject,
 )
 
 try:
@@ -145,7 +145,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		Glyphs.addCallback(self.documentChanged, DOCUMENTACTIVATED)
 		Glyphs.addCallback(self.documentChanged, DOCUMENTCLOSED)
 		self.w.bind("close", self.windowClosed)
-		self.w.bind("resize", self.syncContentWidth)
+		self.w.bind("resize", self.handleLiveResize)
 		self.w.open()
 
 	@objc.python_method
@@ -159,7 +159,29 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.w = None
 
 	def clipFrameChanged_(self, notification):
+		self.handleLiveResize()
+
+	def delayedRebuild(self):
+		if getattr(self, "w", None) is None:
+			return
+		self.rebuildList()
+
+	@objc.python_method
+	def handleLiveResize(self, sender=None):
+		# The autoresizing chain doesn't reliably move the right-anchored
+		# controls on every system, but a rebuild always lays out correctly —
+		# so resizing triggers exactly that: throttled during the drag, plus a
+		# trailing pass once things settle.
+		if getattr(self, "_rebuilding", False) or getattr(self, "w", None) is None:
+			return
 		self.syncContentWidth()
+		NSObject.cancelPreviousPerformRequestsWithTarget_selector_object_(self, "delayedRebuild", None)
+		self.performSelector_withObject_afterDelay_("delayedRebuild", None, 0.18)
+		now = time.time()
+		if now - getattr(self, "_lastResizeRebuild", 0) < 0.12:
+			return
+		self._lastResizeRebuild = now
+		self.rebuildList()
 
 	@objc.python_method
 	def documentChanged(self, info=None):
@@ -194,6 +216,14 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def rebuildList(self):
+		self._rebuilding = True
+		try:
+			self._rebuildList()
+		finally:
+			self._rebuilding = False
+
+	@objc.python_method
+	def _rebuildList(self):
 		scrollY = 0
 		if hasattr(self.w, "scroll"):
 			try:
@@ -360,7 +390,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		title = check["title"]
 		if self.editMode and check.get("custom"):
 			title += "  (custom)"
-		labelRight = -(MARGIN + 72) if (self.editMode and check.get("custom")) else -40
+		labelRight = -(MARGIN + 58) if (self.editMode and check.get("custom")) else -40
 		label = vanilla.TextBox((titleX, y + 5, labelRight, 16), title, sizeStyle="small")
 		if self.editMode and isHidden:
 			label.getNSTextField().setTextColor_(NSColor.secondaryLabelColor())
@@ -369,9 +399,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 		if self.editMode:
 			if check.get("custom"):
 				remove = vanilla.Button(
-					(-(MARGIN + 66), y + 2, 66, 19), "Remove", sizeStyle="small",
+					(-(MARGIN + 52), y + 4, 52, 17), "Remove", sizeStyle="small",
 					callback=lambda sender, cid=check["id"]: self.removeCustomCheck(cid),
 				)
+				removeNSButton = remove.getNSButton()
+				removeNSButton.setBordered_(False)
+				removeNSButton.setAlignment_(1)  # right-aligned, flush with the margin
+				removeNSButton.setAttributedTitle_(NSAttributedString.alloc().initWithString_attributes_("Remove", {
+					NSForegroundColorAttributeName: NSColor.labelColor(),
+					NSFontAttributeName: NSFont.systemFontOfSize_(NSFont.smallSystemFontSize()),
+				}))
 				setattr(group, "remove_%s" % safeCheck, remove)
 		else:
 			info = vanilla.Button(
