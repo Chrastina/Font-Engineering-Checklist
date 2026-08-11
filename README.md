@@ -4,7 +4,7 @@ A QA checklist for your font, living in a floating window inside [Glyphs](https:
 
 By **Michal Chrastina & Kasper**.
 
-> **Status: early development (Phase 0).** The plugin currently loads and shows a placeholder window. The checklist UI is coming next — see the roadmap below.
+> **Status: in development (Phase 1).** The checklist window is functional — categories, checkboxes, progress bar, info popovers, per-font saved state, show/hide, custom checks. The checker buttons land in Phase 2.
 
 ## How it works
 
@@ -42,7 +42,7 @@ Not yet in the Plugin Manager (that comes later). For now:
 Clone the repo and symlink the plugin into your Plugins folder(s), then relaunch Glyphs:
 
 ```bash
-git clone https://github.com/<user>/FontEngineeringChecklist.git ~/Documents/FontEngineeringChecklist
+git clone https://github.com/Chrastina/Font-Engineering-Checklist.git ~/Documents/FontEngineeringChecklist
 ln -s ~/Documents/FontEngineeringChecklist/FontEngineeringChecklist.glyphsPlugin ~/Library/"Application Support"/"Glyphs 3"/Plugins/
 ln -s ~/Documents/FontEngineeringChecklist/FontEngineeringChecklist.glyphsPlugin ~/Library/"Application Support"/"Glyphs 4"/Plugins/
 ```
@@ -52,7 +52,7 @@ The checklist content lives in [`checks.json`](FontEngineeringChecklist.glyphsPl
 ## Roadmap
 
 - **Phase 0 — scaffold** ✓ repo, plugin bundle, full checklist data
-- **Phase 1 — usable checklist**: window UI with collapsible categories, checkboxes, progress bar, info popovers, per-font persistence, show/hide, custom checks
+- **Phase 1 — usable checklist** ✓ window UI with collapsible categories, checkboxes, progress bar, info popovers, per-font persistence, show/hide, custom checks
 - **Phase 2 — first checkers**: the pure data queries (font info, PS name length, metrics keys in sync, tabular widths, small caps coverage…) plus the failure-report pattern
 - **Phase 3 — remaining checkers**: vertical metrics comparisons, anchors, carets, contour directions…
 - **Phase 4 — release**: polish, docs, beta testers, Plugin Manager registration
