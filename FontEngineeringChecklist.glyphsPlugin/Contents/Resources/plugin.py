@@ -211,9 +211,11 @@ class FontEngineeringChecklist(GeneralPlugin):
 				callback=lambda sender, cid=catId: self.toggleCollapsed(cid),
 			)
 			discloseNSButton = disclose.getNSButton()
-			discloseNSButton.setBezelStyle_(NS_BEZEL_DISCLOSURE)
-			discloseNSButton.setButtonType_(NS_BUTTON_TYPE_ONOFF)
 			discloseNSButton.setTitle_("")
+			# Type must be set before the bezel style, otherwise the
+			# open/closed state never renders on the triangle.
+			discloseNSButton.setButtonType_(NS_BUTTON_TYPE_ONOFF)
+			discloseNSButton.setBezelStyle_(NS_BEZEL_DISCLOSURE)
 			discloseNSButton.setState_(0 if isCollapsed else 1)
 			setattr(group, "disclose_%s" % safeCat, disclose)
 
@@ -258,6 +260,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 			(0, 54, -0, -44), documentView,
 			hasHorizontalScroller=False, drawsBackground=False,
 		)
+		nsScrollView = self.w.scroll.getNSScrollView()
+		# Overlay scrollers: transparent, no white track, and they reserve no
+		# layout width.
+		nsScrollView.setScrollerStyle_(1)
+		# Sync the content width to the actually visible area — with legacy
+		# scrollers the clip view is narrower than the window, and the
+		# right-anchored column must track the clip edge, not the window edge.
+		clipWidth = nsScrollView.contentView().frame().size.width
+		if clipWidth and int(clipWidth) != int(contentWidth):
+			documentView.setFrameSize_((clipWidth, height))
 		if scrollY:
 			documentView.scrollPoint_((0, scrollY))
 		self.updateCounts()
