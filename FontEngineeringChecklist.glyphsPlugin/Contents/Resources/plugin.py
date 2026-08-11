@@ -203,7 +203,12 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def styleEditButton(self, title):
-		self.w.editButton.getNSButton().setAttributedTitle_(self.rightAlignedTitle(title))
+		# The frame hugs the text and its right edge sits on the margin, so
+		# the word lands flush no matter how the button aligns its title.
+		attributed = self.rightAlignedTitle(title)
+		width = int(attributed.size().width) + 6
+		self.w.editButton.setPosSize((-(width + MARGIN - 2), -32, width, 18))
+		self.w.editButton.getNSButton().setAttributedTitle_(attributed)
 
 	@objc.python_method
 	def toggleEditMode(self, sender):
@@ -419,13 +424,15 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 		if self.editMode:
 			if check.get("custom"):
+				removeTitle = self.rightAlignedTitle("Remove")
+				removeWidth = int(removeTitle.size().width) + 6
 				remove = vanilla.Button(
-					(-(MARGIN + 52), y + 4, 52, 17), "Remove", sizeStyle="small",
+					(-(removeWidth + MARGIN - 2), y + 4, removeWidth, 17), "Remove", sizeStyle="small",
 					callback=lambda sender, cid=check["id"]: self.removeCustomCheck(cid),
 				)
 				removeNSButton = remove.getNSButton()
 				removeNSButton.setBordered_(False)
-				removeNSButton.setAttributedTitle_(self.rightAlignedTitle("Remove"))
+				removeNSButton.setAttributedTitle_(removeTitle)
 				setattr(group, "remove_%s" % safeCheck, remove)
 				if collect is not None:
 					collect.append(remove._nsObject)
@@ -605,26 +612,18 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def showInfo(self, sender, checkId):
-		# Toggle: clicking the ⓘ of the open popover closes it. State is
-		# cleared before closing so the "did close" handler doesn't arm the
-		# reopen guard — otherwise the next click would be swallowed.
+		# Toggle: clicking the ⓘ of the open popover closes it. (On macOS the
+		# click that closes a transient popover is swallowed and never reaches
+		# the button, so this branch is a safety net — no reopen guard needed,
+		# and one would eat the next genuine click.)
 		if self.popover is not None and self.popoverCheckId == checkId:
 			popover = self.popover
 			self.popover = None
 			self.popoverCheckId = None
-			self._lastClosedId = None
 			try:
 				popover.close()
 			except Exception:
 				pass
-			return
-		# A transient popover closes on the mouse-down of this very click,
-		# before the button action fires — don't immediately reopen it.
-		if (
-			getattr(self, "_lastClosedId", None) == checkId
-			and time.time() - getattr(self, "_lastClosedTime", 0) < 0.4
-		):
-			self._lastClosedId = None
 			return
 
 		check = next((c for c in self.allChecks() if c["id"] == checkId), None)
@@ -655,8 +654,6 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def popoverDidClose(self, sender):
-		self._lastClosedId = self.popoverCheckId
-		self._lastClosedTime = time.time()
 		self.popover = None
 		self.popoverCheckId = None
 
