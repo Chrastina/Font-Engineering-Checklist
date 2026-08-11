@@ -21,6 +21,7 @@ from GlyphsApp.plugins import GeneralPlugin
 from AppKit import (
 	NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont,
 	NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName,
+	NSButton, NSCursor, NSBezierPath, NSNotificationCenter,
 )
 
 try:
@@ -46,8 +47,10 @@ ROW_HEIGHT = 24
 HEADER_HEIGHT = 28
 
 NS_VIEW_WIDTH_SIZABLE = 2
+NS_VIEW_MIN_X_MARGIN = 1
 NS_BEZEL_DISCLOSURE = 5
 NS_BUTTON_TYPE_PUSHONPUSHOFF = 1
+NSVIEW_FRAME_CHANGED = "NSViewFrameDidChangeNotification"
 
 
 # A flipped document view keeps short content pinned to the top of the scroll
@@ -58,6 +61,29 @@ except objc.error:
 	class FECFlippedDocumentView(NSView):
 		def isFlipped(self):
 			return True
+
+
+# The hamburger grip on category headers in edit mode: grab it and drop the
+# category where it should go. The reorder commits on mouse-up.
+try:
+	FECDragHandleView = objc.lookUpClass("FECDragHandleView")
+except objc.error:
+	class FECDragHandleView(NSView):
+		def drawRect_(self, rect):
+			NSColor.tertiaryLabelColor().set()
+			width = self.bounds().size.width
+			for lineY in (4.5, 7.5, 10.5):
+				NSBezierPath.strokeLineFromPoint_toPoint_((3, lineY), (width - 3, lineY))
+
+		def mouseDown_(self, event):
+			NSCursor.closedHandCursor().push()
+
+		def mouseUp_(self, event):
+			NSCursor.pop()
+			plugin = getattr(self, "plugin", None)
+			catId = getattr(self, "catId", None)
+			if plugin is not None and catId is not None:
+				plugin.dragEnded(catId, event)
 
 
 class FontEngineeringChecklist(GeneralPlugin):
@@ -129,7 +155,11 @@ class FontEngineeringChecklist(GeneralPlugin):
 				Glyphs.removeCallback(self.documentChanged, signal)
 			except Exception:
 				pass
+		NSNotificationCenter.defaultCenter().removeObserver_name_object_(self, NSVIEW_FRAME_CHANGED, None)
 		self.w = None
+
+	def clipFrameChanged_(self, notification):
+		self.syncContentWidth()
 
 	@objc.python_method
 	def documentChanged(self, info=None):
@@ -199,26 +229,27 @@ class FontEngineeringChecklist(GeneralPlugin):
 			height += 4
 		height += 6
 
+		# Static snapshots of the native disclosure control: identical pixels,
+		# but swapping an image is instant — no rotation animation.
+		triangleClosed = self.discloseTriangleImage(0)
+		triangleOpen = self.discloseTriangleImage(1)
+
+		self._headerSlots = []
+		self._dragHandles = []
 		group = vanilla.Group((0, 0, contentWidth, height))
+		groupNSView = group.getNSView()
 		y = 6
 		for category, catChecks, isCollapsed in layout:
 			catId = category["id"]
 			safeCat = self.safeAttr(catId)
+			self._headerSlots.append((catId, y))
 
-			# The native disclosure control — the same triangle Glyphs'
-			# palettes use.
-			disclose = vanilla.Button(
-				(MARGIN - 4, y + 6, 16, 16), "",
+			disclose = vanilla.ImageButton(
+				(MARGIN - 4, y + 6, 16, 16),
+				imageObject=(triangleClosed if isCollapsed else triangleOpen),
+				bordered=False,
 				callback=lambda sender, cid=catId: self.toggleCollapsed(cid),
 			)
-			discloseNSButton = disclose.getNSButton()
-			discloseNSButton.setTitle_("")
-			# The AppKit disclosure recipe: push-on-push-off type first, then
-			# the disclosure bezel — any other type ignores the state and
-			# always draws the closed triangle.
-			discloseNSButton.setButtonType_(NS_BUTTON_TYPE_PUSHONPUSHOFF)
-			discloseNSButton.setBezelStyle_(NS_BEZEL_DISCLOSURE)
-			discloseNSButton.setState_(0 if isCollapsed else 1)
 			setattr(group, "disclose_%s" % safeCat, disclose)
 
 			label = vanilla.TextBox((MARGIN + 16, y + 8, -130, 15), category["name"], sizeStyle="small")
@@ -226,20 +257,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 			setattr(group, "label_%s" % safeCat, label)
 
 			if self.editMode:
-				up = vanilla.Button(
-					(-115, y + 7, 18, 16), "↑", sizeStyle="small",
-					callback=lambda sender, cid=catId: self.moveCategory(cid, -1),
-				)
-				up.getNSButton().setBordered_(False)
-				setattr(group, "up_%s" % safeCat, up)
-				down = vanilla.Button(
-					(-97, y + 7, 18, 16), "↓", sizeStyle="small",
-					callback=lambda sender, cid=catId: self.moveCategory(cid, 1),
-				)
-				down.getNSButton().setBordered_(False)
-				setattr(group, "down_%s" % safeCat, down)
-
-			countBox = vanilla.TextBox((-80, y + 9, -(MARGIN - 2), 14), "", alignment="right", sizeStyle="small")
+				handle = FECDragHandleView.alloc().initWithFrame_((
+					(contentWidth - (MARGIN + 16), height - (y + 7) - 16), (16, 16)))
+				handle.setAutoresizingMask_(NS_VIEW_MIN_X_MARGIN)
+				handle.plugin = self
+				handle.catId = catId
+				groupNSView.addSubview_(handle)
+				self._dragHandles.append(handle)
+				countBox = vanilla.TextBox((-135, y + 9, -45, 14), "", alignment="right", sizeStyle="small")
+			else:
+				countBox = vanilla.TextBox((-80, y + 9, -(MARGIN - 2), 14), "", alignment="right", sizeStyle="small")
 			setattr(group, "count_%s" % safeCat, countBox)
 			self.catCountBoxes[catId] = countBox
 			y += HEADER_HEIGHT
@@ -266,6 +293,13 @@ class FontEngineeringChecklist(GeneralPlugin):
 		# Overlay scrollers: transparent, no white track, and they reserve no
 		# layout width.
 		nsScrollView.setScrollerStyle_(1)
+		# The clip view's frame-change notification fires continuously during
+		# live resize — the window's own resize event does not.
+		center = NSNotificationCenter.defaultCenter()
+		center.removeObserver_name_object_(self, NSVIEW_FRAME_CHANGED, None)
+		clipView = nsScrollView.contentView()
+		clipView.setPostsFrameChangedNotifications_(True)
+		center.addObserver_selector_name_object_(self, "clipFrameChanged:", NSVIEW_FRAME_CHANGED, clipView)
 		self.syncContentWidth()
 		if scrollY:
 			documentView.scrollPoint_((0, scrollY))
@@ -326,7 +360,8 @@ class FontEngineeringChecklist(GeneralPlugin):
 		title = check["title"]
 		if self.editMode and check.get("custom"):
 			title += "  (custom)"
-		label = vanilla.TextBox((titleX, y + 5, -40, 16), title, sizeStyle="small")
+		labelRight = -(MARGIN + 72) if (self.editMode and check.get("custom")) else -40
+		label = vanilla.TextBox((titleX, y + 5, labelRight, 16), title, sizeStyle="small")
 		if self.editMode and isHidden:
 			label.getNSTextField().setTextColor_(NSColor.secondaryLabelColor())
 		setattr(group, "title_%s" % safeCheck, label)
@@ -334,10 +369,9 @@ class FontEngineeringChecklist(GeneralPlugin):
 		if self.editMode:
 			if check.get("custom"):
 				remove = vanilla.Button(
-					(-(MARGIN + 16), y + 4, 16, 16), "−", sizeStyle="small",
+					(-(MARGIN + 66), y + 2, 66, 19), "Remove", sizeStyle="small",
 					callback=lambda sender, cid=check["id"]: self.removeCustomCheck(cid),
 				)
-				remove.getNSButton().setBordered_(False)
 				setattr(group, "remove_%s" % safeCheck, remove)
 		else:
 			info = vanilla.Button(
@@ -387,15 +421,40 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.rebuildList()
 
 	@objc.python_method
-	def moveCategory(self, catId, delta):
-		order = [c["id"] for c in self.orderedCategories()]
-		i = order.index(catId)
-		j = i + delta
-		if j < 0 or j >= len(order):
+	def dragEnded(self, catId, event):
+		"""Commits a category drag: the header lands where the mouse let go."""
+		if not getattr(self, "_headerSlots", None):
 			return
-		order[i], order[j] = order[j], order[i]
+		try:
+			documentView = self.w.scroll.getNSScrollView().documentView()
+			dropY = documentView.convertPoint_fromView_(event.locationInWindow(), None).y
+		except Exception:
+			return
+		order = [cid for cid, slotY in self._headerSlots]
+		if catId not in order:
+			return
+		order.remove(catId)
+		centers = [slotY + HEADER_HEIGHT / 2.0 for cid, slotY in self._headerSlots if cid != catId]
+		target = sum(1 for center in centers if center < dropY)
+		order.insert(target, catId)
+		# Categories not currently listed keep their place at the end.
+		order += [c["id"] for c in self.orderedCategories() if c["id"] not in order]
 		Glyphs.defaults[ORDER_KEY] = order
 		self.rebuildList()
+
+	@objc.python_method
+	def discloseTriangleImage(self, state):
+		"""Snapshot of the native disclosure control in the given state."""
+		button = NSButton.alloc().initWithFrame_(((0, 0), (16, 16)))
+		button.setTitle_("")
+		button.setButtonType_(NS_BUTTON_TYPE_PUSHONPUSHOFF)
+		button.setBezelStyle_(NS_BEZEL_DISCLOSURE)
+		button.setState_(state)
+		rep = button.bitmapImageRepForCachingDisplayInRect_(button.bounds())
+		button.cacheDisplayInRect_toBitmapImageRep_(button.bounds(), rep)
+		image = NSImage.alloc().initWithSize_((16, 16))
+		image.addRepresentation_(rep)
+		return image
 
 	@objc.python_method
 	def removeCustomCheck(self, checkId):
