@@ -17,7 +17,7 @@ import uuid
 import objc
 from GlyphsApp import Glyphs, WINDOW_MENU, DOCUMENTOPENED, DOCUMENTACTIVATED, DOCUMENTCLOSED, Message
 from GlyphsApp.plugins import GeneralPlugin
-from AppKit import NSMenuItem, NSWorkspace, NSURL
+from AppKit import NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor
 
 try:
 	import vanilla
@@ -30,7 +30,6 @@ except ImportError:
 USERDATA_KEY = "com.michalchrastina.FontEngineeringChecklist"
 HIDDEN_KEY = USERDATA_KEY + ".hiddenChecks"
 CUSTOM_KEY = USERDATA_KEY + ".customChecks"
-COLLAPSED_KEY = USERDATA_KEY + ".collapsedCategories"
 
 STATE_UNCHECKED = 0
 STATE_CHECKED = 1   # ticked manually
@@ -40,6 +39,16 @@ MARGIN = 15
 ROW_HEIGHT = 24
 HEADER_HEIGHT = 28
 CONTENT_WIDTH = 380
+
+
+# A flipped document view keeps short content pinned to the top of the scroll
+# area instead of the bottom.
+try:
+	FECFlippedDocumentView = objc.lookUpClass("FECFlippedDocumentView")
+except objc.error:
+	class FECFlippedDocumentView(NSView):
+		def isFlipped(self):
+			return True
 
 
 class FontEngineeringChecklist(GeneralPlugin):
@@ -65,6 +74,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 			self.w.show()
 			return
 		self.data = self.loadChecks()
+		self.editMode = False
 		self.buildWindow()
 
 	# ---------------------------------------------------------------- window
@@ -80,15 +90,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 			minSize=(400, 320), maxSize=(400, 1600),
 			autosaveName=USERDATA_KEY + ".mainWindow",
 		)
-		self.w.fontName = vanilla.TextBox((MARGIN, 10, -MARGIN, 16), "", sizeStyle="small")
+		self.w.fontName = vanilla.TextBox((MARGIN, 10, -60, 16), "", sizeStyle="small")
+		self.w.editButton = vanilla.Button(
+			(-55, 8, 40, 18), "Edit", sizeStyle="small", callback=self.toggleEditMode)
+		self.w.editButton.getNSButton().setBordered_(False)
 		self.w.progressBar = vanilla.ProgressBar((MARGIN, 33, -110, 12), minValue=0, maxValue=100)
 		self.w.progressText = vanilla.TextBox((-105, 31, -MARGIN, 16), "", sizeStyle="small")
 		self.w.topDivider = vanilla.HorizontalLine((0, 53, -0, 1))
 		self.w.bottomDivider = vanilla.HorizontalLine((0, -43, -0, 1))
 		self.w.addButton = vanilla.Button(
 			(MARGIN, -33, 90, 20), "＋ Add Check", sizeStyle="small", callback=self.openAddSheet)
-		self.w.editButton = vanilla.Button(
-			(115, -33, 100, 20), "Edit Checks…", sizeStyle="small", callback=self.openEditSheet)
 
 		self.rebuildList()
 		self.updateHeader()
@@ -123,6 +134,12 @@ class FontEngineeringChecklist(GeneralPlugin):
 		else:
 			self.w.fontName.set(font.familyName or "Unnamed font")
 
+	@objc.python_method
+	def toggleEditMode(self, sender):
+		self.editMode = not self.editMode
+		self.w.editButton.setTitle("Done" if self.editMode else "Edit")
+		self.rebuildList()
+
 	# ------------------------------------------------------------- main list
 
 	@objc.python_method
@@ -135,72 +152,113 @@ class FontEngineeringChecklist(GeneralPlugin):
 		font = Glyphs.font
 		states = self.getStates(font)
 		hidden = set(self.getHidden())
-		collapsed = set(self.getCollapsed())
 		checksByCat = self.checksByCategory()
 
-		# first pass: measure
-		height = 6
+		# In edit mode every check is listed (so hidden ones can be unhidden);
+		# in normal mode hidden checks and fully hidden categories disappear.
 		layout = []
+		height = 6
 		for category in self.data["categories"]:
-			catId = category["id"]
-			catChecks = [c for c in checksByCat.get(catId, []) if c["id"] not in hidden]
+			catChecks = checksByCat.get(category["id"], [])
+			if not self.editMode:
+				catChecks = [c for c in catChecks if c["id"] not in hidden]
 			if not catChecks:
 				continue
-			isCollapsed = catId in collapsed
-			layout.append((category, catChecks, isCollapsed))
-			height += HEADER_HEIGHT
-			if not isCollapsed:
-				height += len(catChecks) * ROW_HEIGHT
-			height += 4
+			layout.append((category, catChecks))
+			height += HEADER_HEIGHT + len(catChecks) * ROW_HEIGHT + 4
 		height += 6
 
 		group = vanilla.Group((0, 0, CONTENT_WIDTH, height))
 		y = 6
-		for category, catChecks, isCollapsed in layout:
+		for category, catChecks in layout:
 			catId = category["id"]
 			safeCat = self.safeAttr(catId)
-			triangle = "▸" if isCollapsed else "▾"
-			disclose = vanilla.Button(
-				(6, y + 5, 22, 18), triangle, sizeStyle="small",
-				callback=lambda sender, cid=catId: self.toggleCollapsed(cid),
-			)
-			disclose.getNSButton().setBordered_(False)
-			setattr(group, "disclose_%s" % safeCat, disclose)
-			label = vanilla.TextBox((30, y + 6, -75, 17), category["name"])
+			label = vanilla.TextBox((12, y + 6, -75, 17), category["name"])
 			setattr(group, "label_%s" % safeCat, label)
 			countBox = vanilla.TextBox((-70, y + 9, -10, 14), "", sizeStyle="small")
 			setattr(group, "count_%s" % safeCat, countBox)
 			self.catCountBoxes[catId] = countBox
 			y += HEADER_HEIGHT
 
-			if not isCollapsed:
-				for check in catChecks:
-					safeCheck = self.safeAttr(check["id"])
-					state = states.get(check["id"], 0)
-					box = vanilla.CheckBox(
-						(34, y + 2, -40, 20), check["title"],
-						value=state > 0, sizeStyle="small",
-						callback=lambda sender, cid=check["id"]: self.checkToggled(sender, cid),
-					)
-					if font is None:
-						box.enable(False)
-					setattr(group, "check_%s" % safeCheck, box)
-					self.checkboxRefs[check["id"]] = box
-					info = vanilla.Button(
-						(-34, y + 3, 24, 18), "ⓘ", sizeStyle="small",
-						callback=lambda sender, cid=check["id"]: self.showInfo(sender, cid),
-					)
-					info.getNSButton().setBordered_(False)
-					setattr(group, "info_%s" % safeCheck, info)
-					y += ROW_HEIGHT
+			for check in catChecks:
+				if self.editMode:
+					self.buildEditRow(group, check, check["id"] in hidden, y)
+				else:
+					self.buildCheckRow(group, check, states, font, y)
+				y += ROW_HEIGHT
 			y += 4
+
+		documentView = FECFlippedDocumentView.alloc().initWithFrame_(((0, 0), (CONTENT_WIDTH, height)))
+		groupView = group.getNSView()
+		groupView.setFrame_(((0, 0), (CONTENT_WIDTH, height)))
+		documentView.addSubview_(groupView)
 
 		self._contentGroup = group
 		self.w.scroll = vanilla.ScrollView(
-			(0, 54, -0, -44), group.getNSView(),
+			(0, 54, -0, -44), documentView,
 			hasHorizontalScroller=False, drawsBackground=False,
 		)
 		self.updateCounts()
+
+	@objc.python_method
+	def buildCheckRow(self, group, check, states, font, y):
+		safeCheck = self.safeAttr(check["id"])
+		state = states.get(check["id"], 0)
+		box = vanilla.CheckBox(
+			(28, y + 2, -40, 20), check["title"],
+			value=state > 0, sizeStyle="small",
+			callback=lambda sender, cid=check["id"]: self.checkToggled(sender, cid),
+		)
+		if font is None:
+			box.enable(False)
+		setattr(group, "check_%s" % safeCheck, box)
+		self.checkboxRefs[check["id"]] = box
+		info = vanilla.Button(
+			(-34, y + 3, 24, 18), "ⓘ", sizeStyle="small",
+			callback=lambda sender, cid=check["id"]: self.showInfo(sender, cid),
+		)
+		info.getNSButton().setBordered_(False)
+		setattr(group, "info_%s" % safeCheck, info)
+
+	@objc.python_method
+	def buildEditRow(self, group, check, isHidden, y):
+		safeCheck = self.safeAttr(check["id"])
+		eyeImage = self.eyeImage(not isHidden)
+		if eyeImage is not None:
+			eye = vanilla.ImageButton(
+				(24, y + 3, 24, 18), imageObject=eyeImage, bordered=False,
+				callback=lambda sender, cid=check["id"]: self.visibilityToggled(cid),
+			)
+		else:
+			eye = vanilla.Button(
+				(24, y + 3, 24, 18), "👁" if not isHidden else "–", sizeStyle="small",
+				callback=lambda sender, cid=check["id"]: self.visibilityToggled(cid),
+			)
+			eye.getNSButton().setBordered_(False)
+		setattr(group, "eye_%s" % safeCheck, eye)
+
+		title = check["title"]
+		if check.get("custom"):
+			title += "  (custom)"
+		label = vanilla.TextBox((54, y + 5, -40, 16), title, sizeStyle="small")
+		if isHidden:
+			label.getNSTextField().setTextColor_(NSColor.secondaryLabelColor())
+		setattr(group, "editlabel_%s" % safeCheck, label)
+
+		if check.get("custom"):
+			remove = vanilla.Button(
+				(-34, y + 3, 24, 18), "−", sizeStyle="small",
+				callback=lambda sender, cid=check["id"]: self.removeCustomCheck(cid),
+			)
+			remove.getNSButton().setBordered_(False)
+			setattr(group, "remove_%s" % safeCheck, remove)
+
+	@objc.python_method
+	def eyeImage(self, visible):
+		if hasattr(NSImage, "imageWithSystemSymbolName_accessibilityDescription_"):
+			name = "eye" if visible else "eye.slash"
+			return NSImage.imageWithSystemSymbolName_accessibilityDescription_(name, None)
+		return None
 
 	@objc.python_method
 	def checkToggled(self, sender, checkId):
@@ -211,6 +269,22 @@ class FontEngineeringChecklist(GeneralPlugin):
 		newState = STATE_CHECKED if sender.get() else STATE_UNCHECKED
 		self.setState(font, checkId, newState)
 		self.updateCounts()
+
+	@objc.python_method
+	def visibilityToggled(self, checkId):
+		hidden = set(self.getHidden())
+		if checkId in hidden:
+			hidden.remove(checkId)
+		else:
+			hidden.add(checkId)
+		Glyphs.defaults[HIDDEN_KEY] = sorted(hidden)
+		self.rebuildList()
+
+	@objc.python_method
+	def removeCustomCheck(self, checkId):
+		Glyphs.defaults[CUSTOM_KEY] = [c for c in self.plainCustomChecks() if c["id"] != checkId]
+		Glyphs.defaults[HIDDEN_KEY] = [h for h in self.getHidden() if h != checkId]
+		self.rebuildList()
 
 	@objc.python_method
 	def updateCounts(self):
@@ -234,16 +308,6 @@ class FontEngineeringChecklist(GeneralPlugin):
 		percent = int(round(done * 100.0 / total)) if total else 0
 		self.w.progressBar.set(percent)
 		self.w.progressText.set("%i %% (%i/%i)" % (percent, done, total))
-
-	@objc.python_method
-	def toggleCollapsed(self, catId):
-		collapsed = set(self.getCollapsed())
-		if catId in collapsed:
-			collapsed.remove(catId)
-		else:
-			collapsed.add(catId)
-		Glyphs.defaults[COLLAPSED_KEY] = sorted(collapsed)
-		self.rebuildList()
 
 	# ------------------------------------------------------------- info popover
 
@@ -317,78 +381,6 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.addSheet.close()
 		self.rebuildList()
 
-	# ------------------------------------------------------------- edit sheet
-
-	@objc.python_method
-	def openEditSheet(self, sender):
-		self.editSheet = vanilla.Sheet((520, 440), self.w)
-		self.editSheet.list = vanilla.List(
-			(0, 0, -0, -50), [],
-			columnDescriptions=[
-				{"title": "Show", "cell": vanilla.CheckBoxListCell(), "width": 40, "editable": True},
-				{"title": "Check", "editable": False},
-				{"title": "Category", "editable": False, "width": 140},
-			],
-			editCallback=self.visibilityEdited,
-			allowsMultipleSelection=False,
-		)
-		self.editSheet.removeButton = vanilla.Button(
-			(MARGIN, -35, 175, 20), "Remove Custom Check", sizeStyle="small", callback=self.removeCustomCheck)
-		self.editSheet.doneButton = vanilla.Button((-95, -35, 80, 20), "Done", callback=self.editSheetDone)
-		self.editSheet.setDefaultButton(self.editSheet.doneButton)
-		self.fillEditSheet()
-		self.editSheet.open()
-
-	@objc.python_method
-	def fillEditSheet(self):
-		checks = self.allChecks()
-		hidden = set(self.getHidden())
-		catNames = {c["id"]: c["name"] for c in self.data["categories"]}
-		self._editIds = [c["id"] for c in checks]
-		items = []
-		for check in checks:
-			title = check["title"]
-			if check.get("custom"):
-				title += "  (custom)"
-			items.append({
-				"Show": check["id"] not in hidden,
-				"Check": title,
-				"Category": catNames.get(check["category"], check["category"]),
-			})
-		self.editSheet.list.set(items)
-
-	@objc.python_method
-	def visibilityEdited(self, sender):
-		if not hasattr(self, "_editIds"):
-			return
-		hidden = []
-		for checkId, item in zip(self._editIds, sender.get()):
-			if not bool(item["Show"]):
-				hidden.append(checkId)
-		Glyphs.defaults[HIDDEN_KEY] = hidden
-
-	@objc.python_method
-	def removeCustomCheck(self, sender):
-		selection = self.editSheet.list.getSelection()
-		if not selection:
-			Message(title="Nothing selected", message="Select a custom check in the list first.")
-			return
-		checkId = self._editIds[selection[0]]
-		if not checkId.startswith("custom-"):
-			Message(
-				title="Not a custom check",
-				message="Only custom checks can be removed. Built-in checks can be hidden with the Show checkbox instead.",
-			)
-			return
-		Glyphs.defaults[CUSTOM_KEY] = [c for c in self.plainCustomChecks() if c["id"] != checkId]
-		Glyphs.defaults[HIDDEN_KEY] = [h for h in self.getHidden() if h != checkId]
-		self.fillEditSheet()
-
-	@objc.python_method
-	def editSheetDone(self, sender):
-		self.editSheet.close()
-		self.rebuildList()
-
 	# ------------------------------------------------------------- data: checks
 
 	@objc.python_method
@@ -437,11 +429,6 @@ class FontEngineeringChecklist(GeneralPlugin):
 	@objc.python_method
 	def getHidden(self):
 		value = Glyphs.defaults[HIDDEN_KEY]
-		return [str(x) for x in value] if value else []
-
-	@objc.python_method
-	def getCollapsed(self):
-		value = Glyphs.defaults[COLLAPSED_KEY]
 		return [str(x) for x in value] if value else []
 
 	# ------------------------------------------------------------- data: state

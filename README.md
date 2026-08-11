@@ -19,7 +19,7 @@ There are three kinds of checks:
 Other behavior:
 
 - **Progress bar** shows the percentage of visible checks that are ticked.
-- **Show/hide** lets you hide checks that don't apply to you (global, per user).
+- **Show/hide**: click *Edit* above the list and every checkbox becomes an eye icon (like the Reporters palette) — click eyes to hide checks that don't apply to you, then *Done*. Global, per user.
 - **Custom checks**: add your own entries to any category. Stored per machine, not in the font file.
 - **State is saved per font** in `font.userData`, inside the `.glyphs` file. State for checks the current machine doesn't know (e.g. a collaborator's custom checks) is preserved, never pruned.
 - Checker verification is a snapshot — if you edit the font afterwards, re-run the button. It's a checklist, not CI.
@@ -52,7 +52,7 @@ The checklist content lives in [`checks.json`](FontEngineeringChecklist.glyphsPl
 ## Roadmap
 
 - **Phase 0 — scaffold** ✓ repo, plugin bundle, full checklist data
-- **Phase 1 — usable checklist** ✓ window UI with collapsible categories, checkboxes, progress bar, info popovers, per-font persistence, show/hide, custom checks
+- **Phase 1 — usable checklist** ✓ window UI with categories, checkboxes, progress bar, info popovers, per-font persistence, show/hide, custom checks
 - **Phase 2 — first checkers**: the pure data queries (font info, PS name length, metrics keys in sync, tabular widths, small caps coverage…) plus the failure-report pattern
 - **Phase 3 — remaining checkers**: vertical metrics comparisons, anchors, carets, contour directions…
 - **Phase 4 — release**: polish, docs, beta testers, Plugin Manager registration
