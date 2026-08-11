@@ -17,7 +17,8 @@ import uuid
 import objc
 from GlyphsApp import Glyphs, WINDOW_MENU, DOCUMENTOPENED, DOCUMENTACTIVATED, DOCUMENTCLOSED, Message
 from GlyphsApp.plugins import GeneralPlugin
-from AppKit import NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor
+import time
+from AppKit import NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont
 
 try:
 	import vanilla
@@ -84,15 +85,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.checkboxRefs = {}
 		self.catCountBoxes = {}
 		self.popover = None
+		self.popoverCheckId = None
 
 		self.w = vanilla.FloatingWindow(
 			(400, 560), self.name,
 			minSize=(400, 320), maxSize=(400, 1600),
 			autosaveName=USERDATA_KEY + ".mainWindow",
 		)
-		self.w.fontName = vanilla.TextBox((MARGIN, 10, -MARGIN, 16), "", sizeStyle="small")
-		self.w.progressBar = vanilla.ProgressBar((MARGIN, 33, -110, 12), minValue=0, maxValue=100)
-		self.w.progressText = vanilla.TextBox((-105, 31, -MARGIN, 16), "", sizeStyle="small")
+		self.w.fontName = vanilla.TextBox((MARGIN, 10, -120, 17), "")
+		self.w.progressText = vanilla.TextBox((-115, 12, -MARGIN, 14), "", alignment="right", sizeStyle="small")
+		self.w.progressBar = vanilla.ProgressBar((MARGIN, 33, -MARGIN, 12), minValue=0, maxValue=100)
 		self.w.topDivider = vanilla.HorizontalLine((0, 53, -0, 1))
 		self.w.bottomDivider = vanilla.HorizontalLine((0, -43, -0, 1))
 		self.w.addButton = vanilla.Button(
@@ -144,7 +146,12 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def rebuildList(self):
+		scrollY = 0
 		if hasattr(self.w, "scroll"):
+			try:
+				scrollY = self.w.scroll.getNSScrollView().contentView().documentVisibleRect().origin.y
+			except Exception:
+				pass
 			del self.w.scroll
 		self.checkboxRefs = {}
 		self.catCountBoxes = {}
@@ -173,18 +180,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 		for category, catChecks in layout:
 			catId = category["id"]
 			safeCat = self.safeAttr(catId)
-			label = vanilla.TextBox((12, y + 6, -75, 17), category["name"])
+			label = vanilla.TextBox((MARGIN, y + 8, -85, 15), category["name"], sizeStyle="small")
+			label.getNSTextField().setFont_(NSFont.boldSystemFontOfSize_(NSFont.smallSystemFontSize()))
 			setattr(group, "label_%s" % safeCat, label)
-			countBox = vanilla.TextBox((-70, y + 9, -10, 14), "", sizeStyle="small")
+			countBox = vanilla.TextBox((-80, y + 9, -MARGIN, 14), "", alignment="right", sizeStyle="small")
 			setattr(group, "count_%s" % safeCat, countBox)
 			self.catCountBoxes[catId] = countBox
 			y += HEADER_HEIGHT
 
 			for check in catChecks:
-				if self.editMode:
-					self.buildEditRow(group, check, check["id"] in hidden, y)
-				else:
-					self.buildCheckRow(group, check, states, font, y)
+				self.buildRow(group, check, states, font, hidden, y)
 				y += ROW_HEIGHT
 			y += 4
 
@@ -198,60 +203,68 @@ class FontEngineeringChecklist(GeneralPlugin):
 			(0, 54, -0, -44), documentView,
 			hasHorizontalScroller=False, drawsBackground=False,
 		)
+		if scrollY:
+			documentView.scrollPoint_((0, scrollY))
 		self.updateCounts()
 
 	@objc.python_method
-	def buildCheckRow(self, group, check, states, font, y):
+	def buildRow(self, group, check, states, font, hidden, y):
+		# The title is always its own text column at a fixed x, so swapping the
+		# control (checkbox vs. eye) never shifts the text.
 		safeCheck = self.safeAttr(check["id"])
-		state = states.get(check["id"], 0)
-		box = vanilla.CheckBox(
-			(28, y + 2, -40, 20), check["title"],
-			value=state > 0, sizeStyle="small",
-			callback=lambda sender, cid=check["id"]: self.checkToggled(sender, cid),
-		)
-		if font is None:
-			box.enable(False)
-		setattr(group, "check_%s" % safeCheck, box)
-		self.checkboxRefs[check["id"]] = box
-		info = vanilla.Button(
-			(-34, y + 3, 24, 18), "ⓘ", sizeStyle="small",
-			callback=lambda sender, cid=check["id"]: self.showInfo(sender, cid),
-		)
-		info.getNSButton().setBordered_(False)
-		setattr(group, "info_%s" % safeCheck, info)
+		isHidden = check["id"] in hidden
+		controlX = MARGIN + 6
+		titleX = MARGIN + 31
 
-	@objc.python_method
-	def buildEditRow(self, group, check, isHidden, y):
-		safeCheck = self.safeAttr(check["id"])
-		eyeImage = self.eyeImage(not isHidden)
-		if eyeImage is not None:
-			eye = vanilla.ImageButton(
-				(24, y + 3, 24, 18), imageObject=eyeImage, bordered=False,
-				callback=lambda sender, cid=check["id"]: self.visibilityToggled(cid),
-			)
+		if self.editMode:
+			eyeImage = self.eyeImage(not isHidden)
+			if eyeImage is not None:
+				eye = vanilla.ImageButton(
+					(controlX, y + 3, 18, 16), imageObject=eyeImage, bordered=False,
+					callback=lambda sender, cid=check["id"]: self.visibilityToggled(cid),
+				)
+			else:
+				eye = vanilla.Button(
+					(controlX, y + 3, 18, 16), "👁" if not isHidden else "–", sizeStyle="small",
+					callback=lambda sender, cid=check["id"]: self.visibilityToggled(cid),
+				)
+				eye.getNSButton().setBordered_(False)
+			setattr(group, "eye_%s" % safeCheck, eye)
 		else:
-			eye = vanilla.Button(
-				(24, y + 3, 24, 18), "👁" if not isHidden else "–", sizeStyle="small",
-				callback=lambda sender, cid=check["id"]: self.visibilityToggled(cid),
+			state = states.get(check["id"], 0)
+			box = vanilla.CheckBox(
+				(controlX, y + 2, 18, 18), "",
+				value=state > 0, sizeStyle="small",
+				callback=lambda sender, cid=check["id"]: self.checkToggled(sender, cid),
 			)
-			eye.getNSButton().setBordered_(False)
-		setattr(group, "eye_%s" % safeCheck, eye)
+			if font is None:
+				box.enable(False)
+			setattr(group, "check_%s" % safeCheck, box)
+			self.checkboxRefs[check["id"]] = box
 
 		title = check["title"]
-		if check.get("custom"):
+		if self.editMode and check.get("custom"):
 			title += "  (custom)"
-		label = vanilla.TextBox((54, y + 5, -40, 16), title, sizeStyle="small")
-		if isHidden:
+		label = vanilla.TextBox((titleX, y + 5, -44, 16), title, sizeStyle="small")
+		if self.editMode and isHidden:
 			label.getNSTextField().setTextColor_(NSColor.secondaryLabelColor())
-		setattr(group, "editlabel_%s" % safeCheck, label)
+		setattr(group, "title_%s" % safeCheck, label)
 
-		if check.get("custom"):
-			remove = vanilla.Button(
-				(-34, y + 3, 24, 18), "−", sizeStyle="small",
-				callback=lambda sender, cid=check["id"]: self.removeCustomCheck(cid),
+		if self.editMode:
+			if check.get("custom"):
+				remove = vanilla.Button(
+					(-(MARGIN + 24), y + 3, 24, 18), "−", sizeStyle="small",
+					callback=lambda sender, cid=check["id"]: self.removeCustomCheck(cid),
+				)
+				remove.getNSButton().setBordered_(False)
+				setattr(group, "remove_%s" % safeCheck, remove)
+		else:
+			info = vanilla.Button(
+				(-(MARGIN + 24), y + 3, 24, 18), "ⓘ", sizeStyle="small",
+				callback=lambda sender, cid=check["id"]: self.showInfo(sender, cid),
 			)
-			remove.getNSButton().setBordered_(False)
-			setattr(group, "remove_%s" % safeCheck, remove)
+			info.getNSButton().setBordered_(False)
+			setattr(group, "info_%s" % safeCheck, info)
 
 	@objc.python_method
 	def eyeImage(self, visible):
@@ -315,6 +328,24 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def showInfo(self, sender, checkId):
+		# Toggle: clicking the ⓘ of the open popover closes it.
+		if self.popover is not None and getattr(self, "popoverCheckId", None) == checkId:
+			try:
+				self.popover.close()
+			except Exception:
+				pass
+			self.popover = None
+			self.popoverCheckId = None
+			return
+		# A transient popover closes on the mouse-down of this very click,
+		# before the button action fires — don't immediately reopen it.
+		if (
+			getattr(self, "_lastClosedId", None) == checkId
+			and time.time() - getattr(self, "_lastClosedTime", 0) < 0.4
+		):
+			self._lastClosedId = None
+			return
+
 		check = next((c for c in self.allChecks() if c["id"] == checkId), None)
 		if check is None:
 			return
@@ -326,7 +357,8 @@ class FontEngineeringChecklist(GeneralPlugin):
 		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
 		height = 10 + 18 + textHeight + len(links) * 24 + 8
 
-		self.popover = vanilla.Popover((width, height))
+		self.popover = vanilla.Popover((width, height), behavior="transient")
+		self.popoverCheckId = checkId
 		self.popover.title = vanilla.TextBox((10, 8, -10, 16), title, sizeStyle="small")
 		self.popover.text = vanilla.TextBox((10, 28, -10, textHeight), info, sizeStyle="small")
 		y = 28 + textHeight + 2
@@ -337,7 +369,15 @@ class FontEngineeringChecklist(GeneralPlugin):
 			)
 			setattr(self.popover, "link_%i" % i, button)
 			y += 24
+		self.popover.bind("did close", self.popoverDidClose)
 		self.popover.open(parentView=sender, preferredEdge="right")
+
+	@objc.python_method
+	def popoverDidClose(self, sender):
+		self._lastClosedId = getattr(self, "popoverCheckId", None)
+		self._lastClosedTime = time.time()
+		self.popover = None
+		self.popoverCheckId = None
 
 	@objc.python_method
 	def openURL(self, url):
