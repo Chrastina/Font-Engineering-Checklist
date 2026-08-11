@@ -118,6 +118,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 			return
 		if getattr(self, "w", None) is not None:
 			self.w.show()
+			self.w.getNSWindow().makeKeyAndOrderFront_(None)
 			return
 		self.data = self.loadChecks()
 		self.editMode = False
@@ -158,6 +159,9 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.w.bind("close", self.windowClosed)
 		self.w.bind("resize", self.syncContentWidth)
 		self.w.open()
+		# Open as the key window right away — otherwise the panel draws in
+		# the inactive grey appearance until its title bar is clicked.
+		self.w.getNSWindow().makeKeyAndOrderFront_(None)
 
 	@objc.python_method
 	def windowClosed(self, sender):
