@@ -145,7 +145,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		Glyphs.addCallback(self.documentChanged, DOCUMENTACTIVATED)
 		Glyphs.addCallback(self.documentChanged, DOCUMENTCLOSED)
 		self.w.bind("close", self.windowClosed)
-		self.w.bind("resize", self.handleLiveResize)
+		self.w.bind("resize", self.syncContentWidth)
 		self.w.open()
 
 	@objc.python_method
@@ -159,29 +159,9 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.w = None
 
 	def clipFrameChanged_(self, notification):
-		self.handleLiveResize()
-
-	def delayedRebuild(self):
-		if getattr(self, "w", None) is None:
-			return
-		self.rebuildList()
-
-	@objc.python_method
-	def handleLiveResize(self, sender=None):
-		# The autoresizing chain doesn't reliably move the right-anchored
-		# controls on every system, but a rebuild always lays out correctly —
-		# so resizing triggers exactly that: throttled during the drag, plus a
-		# trailing pass once things settle.
-		if getattr(self, "_rebuilding", False) or getattr(self, "w", None) is None:
+		if getattr(self, "_rebuilding", False):
 			return
 		self.syncContentWidth()
-		NSObject.cancelPreviousPerformRequestsWithTarget_selector_object_(self, "delayedRebuild", None)
-		self.performSelector_withObject_afterDelay_("delayedRebuild", None, 0.18)
-		now = time.time()
-		if now - getattr(self, "_lastResizeRebuild", 0) < 0.12:
-			return
-		self._lastResizeRebuild = now
-		self.rebuildList()
 
 	@objc.python_method
 	def documentChanged(self, info=None):
@@ -251,7 +231,9 @@ class FontEngineeringChecklist(GeneralPlugin):
 				catChecks = [c for c in catChecks if c["id"] not in hidden]
 				if not catChecks:
 					continue
-			isCollapsed = category["id"] in collapsed
+			# Edit mode shows everything expanded — hiding and reordering
+			# need all rows reachable.
+			isCollapsed = (category["id"] in collapsed) and not self.editMode
 			layout.append((category, catChecks, isCollapsed))
 			height += HEADER_HEIGHT
 			if not isCollapsed:
@@ -274,29 +256,29 @@ class FontEngineeringChecklist(GeneralPlugin):
 			safeCat = self.safeAttr(catId)
 			self._headerSlots.append((catId, y))
 
-			disclose = vanilla.ImageButton(
-				(MARGIN - 4, y + 6, 16, 16),
-				imageObject=(triangleClosed if isCollapsed else triangleOpen),
-				bordered=False,
-				callback=lambda sender, cid=catId: self.toggleCollapsed(cid),
-			)
-			setattr(group, "disclose_%s" % safeCat, disclose)
+			if self.editMode:
+				# The hamburger grip swaps in for the triangle, same slot —
+				# grab it to reorder the category.
+				handle = FECDragHandleView.alloc().initWithFrame_((
+					(MARGIN - 4, height - (y + 6) - 16), (16, 16)))
+				handle.plugin = self
+				handle.catId = catId
+				groupNSView.addSubview_(handle)
+				self._dragHandles.append(handle)
+			else:
+				disclose = vanilla.ImageButton(
+					(MARGIN - 4, y + 6, 16, 16),
+					imageObject=(triangleClosed if isCollapsed else triangleOpen),
+					bordered=False,
+					callback=lambda sender, cid=catId: self.toggleCollapsed(cid),
+				)
+				setattr(group, "disclose_%s" % safeCat, disclose)
 
 			label = vanilla.TextBox((MARGIN + 16, y + 8, -130, 15), category["name"], sizeStyle="small")
 			label.getNSTextField().setFont_(NSFont.boldSystemFontOfSize_(NSFont.smallSystemFontSize()))
 			setattr(group, "label_%s" % safeCat, label)
 
-			if self.editMode:
-				handle = FECDragHandleView.alloc().initWithFrame_((
-					(contentWidth - (MARGIN + 16), height - (y + 7) - 16), (16, 16)))
-				handle.setAutoresizingMask_(NS_VIEW_MIN_X_MARGIN)
-				handle.plugin = self
-				handle.catId = catId
-				groupNSView.addSubview_(handle)
-				self._dragHandles.append(handle)
-				countBox = vanilla.TextBox((-135, y + 9, -45, 14), "", alignment="right", sizeStyle="small")
-			else:
-				countBox = vanilla.TextBox((-80, y + 9, -(MARGIN - 2), 14), "", alignment="right", sizeStyle="small")
+			countBox = vanilla.TextBox((-80, y + 9, -(MARGIN - 2), 14), "", alignment="right", sizeStyle="small")
 			setattr(group, "count_%s" % safeCat, countBox)
 			self.catCountBoxes[catId] = countBox
 			y += HEADER_HEIGHT
@@ -337,18 +319,23 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def syncContentWidth(self, sender=None):
-		# The clip view does NOT autoresize its document view when the window
-		# resizes — this syncs the content width, and the autoresizing masks
-		# inside take care of the right-anchored controls.
+		# Vanilla resets the content group's autoresizing mask, so the group
+		# never follows the clip view on its own. Moving the frames directly
+		# is reliable: resize the document view AND the group inside it —
+		# the row controls have correct masks and shift with their parent.
 		if getattr(self, "w", None) is None or not hasattr(self.w, "scroll"):
 			return
 		try:
 			nsScrollView = self.w.scroll.getNSScrollView()
-			clipSize = nsScrollView.contentView().frame().size
+			clipWidth = nsScrollView.contentView().frame().size.width
 			documentView = nsScrollView.documentView()
 			docSize = documentView.frame().size
-			if int(docSize.width) != int(clipSize.width):
-				documentView.setFrameSize_((clipSize.width, docSize.height))
+			if int(docSize.width) != int(clipWidth):
+				documentView.setFrameSize_((clipWidth, docSize.height))
+			for subview in documentView.subviews():
+				subSize = subview.frame().size
+				if int(subSize.width) != int(clipWidth):
+					subview.setFrameSize_((clipWidth, subSize.height))
 		except Exception:
 			pass
 
