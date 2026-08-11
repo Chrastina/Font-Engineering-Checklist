@@ -2,7 +2,7 @@
 
 A QA checklist for your font, living in a floating window inside [Glyphs](https://glyphsapp.com). Tick off what you've verified, run built-in checkers where automation makes sense, and get pointed to the right specialist tool where one already exists. Your progress is saved inside the `.glyphs` file, so it travels with the font.
 
-By **Michal Chrastina & Kasper**.
+By **Michal Chrastina & Kasper Pyndt**.
 
 > **Status: in development (Phase 1).** The checklist window is functional — categories, checkboxes, progress bar, info popovers, per-font saved state, show/hide, custom checks. The checker buttons land in Phase 2.
 

@@ -5,7 +5,7 @@
 # Font Engineering Checklist
 # A QA checklist for your font, as a floating window in Glyphs.
 #
-# Michal Chrastina & Kasper
+# Michal Chrastina & Kasper Pyndt
 # https://github.com/Chrastina/Font-Engineering-Checklist
 #
 ###########################################################################################################
@@ -13,12 +13,15 @@
 from __future__ import division, print_function, unicode_literals
 import json
 import os
+import time
 import uuid
 import objc
 from GlyphsApp import Glyphs, WINDOW_MENU, DOCUMENTOPENED, DOCUMENTACTIVATED, DOCUMENTCLOSED, Message
 from GlyphsApp.plugins import GeneralPlugin
-import time
-from AppKit import NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont
+from AppKit import (
+	NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont,
+	NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName,
+)
 
 try:
 	import vanilla
@@ -31,6 +34,8 @@ except ImportError:
 USERDATA_KEY = "com.michalchrastina.FontEngineeringChecklist"
 HIDDEN_KEY = USERDATA_KEY + ".hiddenChecks"
 CUSTOM_KEY = USERDATA_KEY + ".customChecks"
+COLLAPSED_KEY = USERDATA_KEY + ".collapsedCategories"
+ORDER_KEY = USERDATA_KEY + ".categoryOrder"
 
 STATE_UNCHECKED = 0
 STATE_CHECKED = 1   # ticked manually
@@ -39,7 +44,10 @@ STATE_VERIFIED = 2  # ticked by a checker (Phase 2)
 MARGIN = 15
 ROW_HEIGHT = 24
 HEADER_HEIGHT = 28
-CONTENT_WIDTH = 380
+
+NS_VIEW_WIDTH_SIZABLE = 2
+NS_BEZEL_DISCLOSURE = 5
+NS_BUTTON_TYPE_ONOFF = 2
 
 
 # A flipped document view keeps short content pinned to the top of the scroll
@@ -89,7 +97,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 		self.w = vanilla.FloatingWindow(
 			(400, 560), self.name,
-			minSize=(400, 320), maxSize=(400, 1600),
+			minSize=(400, 320), maxSize=(1000, 1600),
 			autosaveName=USERDATA_KEY + ".mainWindow",
 		)
 		self.w.fontName = vanilla.TextBox((MARGIN, 10, -120, 17), "")
@@ -102,6 +110,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.w.editButton = vanilla.Button(
 			(-60, -32, 45, 18), "Edit", sizeStyle="small", callback=self.toggleEditMode)
 		self.w.editButton.getNSButton().setBordered_(False)
+		self.styleEditButton("Edit")
 
 		self.rebuildList()
 		self.updateHeader()
@@ -137,9 +146,17 @@ class FontEngineeringChecklist(GeneralPlugin):
 			self.w.fontName.set(font.familyName or "Unnamed font")
 
 	@objc.python_method
+	def styleEditButton(self, title):
+		attributed = NSAttributedString.alloc().initWithString_attributes_(title, {
+			NSForegroundColorAttributeName: NSColor.labelColor(),
+			NSFontAttributeName: NSFont.systemFontOfSize_(NSFont.smallSystemFontSize()),
+		})
+		self.w.editButton.getNSButton().setAttributedTitle_(attributed)
+
+	@objc.python_method
 	def toggleEditMode(self, sender):
 		self.editMode = not self.editMode
-		self.w.editButton.setTitle("Done" if self.editMode else "Edit")
+		self.styleEditButton("Done" if self.editMode else "Edit")
 		self.rebuildList()
 
 	# ------------------------------------------------------------- main list
@@ -159,43 +176,81 @@ class FontEngineeringChecklist(GeneralPlugin):
 		font = Glyphs.font
 		states = self.getStates(font)
 		hidden = set(self.getHidden())
+		collapsed = set(self.getCollapsed())
 		checksByCat = self.checksByCategory()
+		contentWidth = self.w.getPosSize()[2]
 
 		# In edit mode every check is listed (so hidden ones can be unhidden);
 		# in normal mode hidden checks and fully hidden categories disappear.
 		layout = []
 		height = 6
-		for category in self.data["categories"]:
+		for category in self.orderedCategories():
 			catChecks = checksByCat.get(category["id"], [])
 			if not self.editMode:
 				catChecks = [c for c in catChecks if c["id"] not in hidden]
-			if not catChecks:
-				continue
-			layout.append((category, catChecks))
-			height += HEADER_HEIGHT + len(catChecks) * ROW_HEIGHT + 4
+				if not catChecks:
+					continue
+			isCollapsed = category["id"] in collapsed
+			layout.append((category, catChecks, isCollapsed))
+			height += HEADER_HEIGHT
+			if not isCollapsed:
+				height += len(catChecks) * ROW_HEIGHT
+			height += 4
 		height += 6
 
-		group = vanilla.Group((0, 0, CONTENT_WIDTH, height))
+		group = vanilla.Group((0, 0, contentWidth, height))
 		y = 6
-		for category, catChecks in layout:
+		for category, catChecks, isCollapsed in layout:
 			catId = category["id"]
 			safeCat = self.safeAttr(catId)
-			label = vanilla.TextBox((MARGIN, y + 8, -85, 15), category["name"], sizeStyle="small")
+
+			# The native disclosure control — the same triangle Glyphs'
+			# palettes use.
+			disclose = vanilla.Button(
+				(MARGIN - 4, y + 6, 16, 16), "",
+				callback=lambda sender, cid=catId: self.toggleCollapsed(cid),
+			)
+			discloseNSButton = disclose.getNSButton()
+			discloseNSButton.setBezelStyle_(NS_BEZEL_DISCLOSURE)
+			discloseNSButton.setButtonType_(NS_BUTTON_TYPE_ONOFF)
+			discloseNSButton.setTitle_("")
+			discloseNSButton.setState_(0 if isCollapsed else 1)
+			setattr(group, "disclose_%s" % safeCat, disclose)
+
+			label = vanilla.TextBox((MARGIN + 16, y + 8, -130, 15), category["name"], sizeStyle="small")
 			label.getNSTextField().setFont_(NSFont.boldSystemFontOfSize_(NSFont.smallSystemFontSize()))
 			setattr(group, "label_%s" % safeCat, label)
-			countBox = vanilla.TextBox((-80, y + 9, -MARGIN, 14), "", alignment="right", sizeStyle="small")
+
+			if self.editMode:
+				up = vanilla.Button(
+					(-115, y + 7, 18, 16), "↑", sizeStyle="small",
+					callback=lambda sender, cid=catId: self.moveCategory(cid, -1),
+				)
+				up.getNSButton().setBordered_(False)
+				setattr(group, "up_%s" % safeCat, up)
+				down = vanilla.Button(
+					(-97, y + 7, 18, 16), "↓", sizeStyle="small",
+					callback=lambda sender, cid=catId: self.moveCategory(cid, 1),
+				)
+				down.getNSButton().setBordered_(False)
+				setattr(group, "down_%s" % safeCat, down)
+
+			countBox = vanilla.TextBox((-80, y + 9, -(MARGIN - 2), 14), "", alignment="right", sizeStyle="small")
 			setattr(group, "count_%s" % safeCat, countBox)
 			self.catCountBoxes[catId] = countBox
 			y += HEADER_HEIGHT
 
-			for check in catChecks:
-				self.buildRow(group, check, states, font, hidden, y)
-				y += ROW_HEIGHT
+			if not isCollapsed:
+				for check in catChecks:
+					self.buildRow(group, check, states, font, hidden, y)
+					y += ROW_HEIGHT
 			y += 4
 
-		documentView = FECFlippedDocumentView.alloc().initWithFrame_(((0, 0), (CONTENT_WIDTH, height)))
+		documentView = FECFlippedDocumentView.alloc().initWithFrame_(((0, 0), (contentWidth, height)))
+		documentView.setAutoresizingMask_(NS_VIEW_WIDTH_SIZABLE)
 		groupView = group.getNSView()
-		groupView.setFrame_(((0, 0), (CONTENT_WIDTH, height)))
+		groupView.setFrame_(((0, 0), (contentWidth, height)))
+		groupView.setAutoresizingMask_(NS_VIEW_WIDTH_SIZABLE)
 		documentView.addSubview_(groupView)
 
 		self._contentGroup = group
@@ -245,7 +300,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		title = check["title"]
 		if self.editMode and check.get("custom"):
 			title += "  (custom)"
-		label = vanilla.TextBox((titleX, y + 5, -44, 16), title, sizeStyle="small")
+		label = vanilla.TextBox((titleX, y + 5, -40, 16), title, sizeStyle="small")
 		if self.editMode and isHidden:
 			label.getNSTextField().setTextColor_(NSColor.secondaryLabelColor())
 		setattr(group, "title_%s" % safeCheck, label)
@@ -253,14 +308,14 @@ class FontEngineeringChecklist(GeneralPlugin):
 		if self.editMode:
 			if check.get("custom"):
 				remove = vanilla.Button(
-					(-(MARGIN + 24), y + 3, 24, 18), "−", sizeStyle="small",
+					(-(MARGIN + 16), y + 4, 16, 16), "−", sizeStyle="small",
 					callback=lambda sender, cid=check["id"]: self.removeCustomCheck(cid),
 				)
 				remove.getNSButton().setBordered_(False)
 				setattr(group, "remove_%s" % safeCheck, remove)
 		else:
 			info = vanilla.Button(
-				(-(MARGIN + 24), y + 3, 24, 18), "ⓘ", sizeStyle="small",
+				(-(MARGIN + 16), y + 4, 16, 16), "ⓘ", sizeStyle="small",
 				callback=lambda sender, cid=check["id"]: self.showInfo(sender, cid),
 			)
 			info.getNSButton().setBordered_(False)
@@ -296,6 +351,27 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.rebuildList()
 
 	@objc.python_method
+	def toggleCollapsed(self, catId):
+		collapsed = set(self.getCollapsed())
+		if catId in collapsed:
+			collapsed.remove(catId)
+		else:
+			collapsed.add(catId)
+		Glyphs.defaults[COLLAPSED_KEY] = sorted(collapsed)
+		self.rebuildList()
+
+	@objc.python_method
+	def moveCategory(self, catId, delta):
+		order = [c["id"] for c in self.orderedCategories()]
+		i = order.index(catId)
+		j = i + delta
+		if j < 0 or j >= len(order):
+			return
+		order[i], order[j] = order[j], order[i]
+		Glyphs.defaults[ORDER_KEY] = order
+		self.rebuildList()
+
+	@objc.python_method
 	def removeCustomCheck(self, checkId):
 		Glyphs.defaults[CUSTOM_KEY] = [c for c in self.plainCustomChecks() if c["id"] != checkId]
 		Glyphs.defaults[HIDDEN_KEY] = [h for h in self.getHidden() if h != checkId]
@@ -328,14 +404,18 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def showInfo(self, sender, checkId):
-		# Toggle: clicking the ⓘ of the open popover closes it.
-		if self.popover is not None and getattr(self, "popoverCheckId", None) == checkId:
-			try:
-				self.popover.close()
-			except Exception:
-				pass
+		# Toggle: clicking the ⓘ of the open popover closes it. State is
+		# cleared before closing so the "did close" handler doesn't arm the
+		# reopen guard — otherwise the next click would be swallowed.
+		if self.popover is not None and self.popoverCheckId == checkId:
+			popover = self.popover
 			self.popover = None
 			self.popoverCheckId = None
+			self._lastClosedId = None
+			try:
+				popover.close()
+			except Exception:
+				pass
 			return
 		# A transient popover closes on the mouse-down of this very click,
 		# before the button action fires — don't immediately reopen it.
@@ -374,7 +454,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def popoverDidClose(self, sender):
-		self._lastClosedId = getattr(self, "popoverCheckId", None)
+		self._lastClosedId = self.popoverCheckId
 		self._lastClosedTime = time.time()
 		self.popover = None
 		self.popoverCheckId = None
@@ -387,7 +467,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def openAddSheet(self, sender):
-		categoryNames = [c["name"] for c in self.data["categories"]]
+		categoryNames = [c["name"] for c in self.orderedCategories()]
 		self.addSheet = vanilla.Sheet((380, 250), self.w)
 		self.addSheet.titleLabel = vanilla.TextBox((MARGIN, 17, 65, 16), "Title", sizeStyle="small")
 		self.addSheet.titleField = vanilla.EditText((85, 14, -MARGIN, 22), "")
@@ -410,7 +490,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		if not title:
 			Message(title="Missing title", message="Give the check a title first.")
 			return
-		category = self.data["categories"][self.addSheet.catPopup.get()]["id"]
+		category = self.orderedCategories()[self.addSheet.catPopup.get()]["id"]
 		info = self.addSheet.infoField.get().strip()
 		custom = self.plainCustomChecks()
 		custom.append({
@@ -430,6 +510,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 		path = os.path.join(os.path.dirname(self.__file__()), "checks.json")
 		with open(path, "r", encoding="utf-8") as f:
 			return json.load(f)
+
+	@objc.python_method
+	def orderedCategories(self):
+		categories = list(self.data["categories"])
+		order = Glyphs.defaults[ORDER_KEY]
+		if order:
+			order = [str(x) for x in order]
+			position = {catId: i for i, catId in enumerate(order)}
+			categories.sort(key=lambda c: position.get(c["id"], len(order)))
+		return categories
 
 	@objc.python_method
 	def allChecks(self):
@@ -471,6 +561,11 @@ class FontEngineeringChecklist(GeneralPlugin):
 	@objc.python_method
 	def getHidden(self):
 		value = Glyphs.defaults[HIDDEN_KEY]
+		return [str(x) for x in value] if value else []
+
+	@objc.python_method
+	def getCollapsed(self):
+		value = Glyphs.defaults[COLLAPSED_KEY]
 		return [str(x) for x in value] if value else []
 
 	# ------------------------------------------------------------- data: state

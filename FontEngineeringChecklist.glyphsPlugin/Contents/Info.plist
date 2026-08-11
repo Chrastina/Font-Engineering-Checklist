@@ -13,11 +13,11 @@
 	<key>CFBundleName</key>
 	<string>Font Engineering Checklist</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.2.3</string>
+	<string>0.3.0</string>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>6</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright, Michal Chrastina &amp; Kasper, 2026</string>
+	<string>Copyright, Michal Chrastina &amp; Kasper Pyndt, 2026</string>
 	<key>NSPrincipalClass</key>
 	<string>FontEngineeringChecklist</string>
 	<key>PyMainFileNames</key>
