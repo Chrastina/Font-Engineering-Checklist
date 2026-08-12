@@ -272,8 +272,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 				down.getNSButton().setBordered_(False)
 				setattr(group, "down_%s" % safeCat, down)
 
-			label = vanilla.TextBox((MARGIN + 16, y + 8, -150, 15), category["name"], sizeStyle="small")
-			label.getNSTextField().setFont_(NSFont.boldSystemFontOfSize_(NSFont.smallSystemFontSize()))
+			label = vanilla.TextBox((MARGIN + 16, y + 5, -150, 17), category["name"])
 			setattr(group, "label_%s" % safeCat, label)
 
 			countBox = vanilla.TextBox((-80, y + 9, -(MARGIN - 2), 14), "", alignment="right", sizeStyle="small")
@@ -537,16 +536,16 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 		width = 320
 		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
-		height = 10 + 18 + textHeight + (24 if runAvailable else 0) + len(links) * 24 + 8
+		height = 10 + 22 + textHeight + (24 if runAvailable else 0) + len(links) * 24 + 8
 
 		self.popover = vanilla.Popover((width, height), behavior="transient")
 		self.popoverCheckId = checkId
-		self.popover.title = vanilla.TextBox((10, 8, -10, 16), title, sizeStyle="small")
-		self.popover.text = vanilla.TextBox((10, 28, -10, textHeight), info, sizeStyle="small")
-		y = 28 + textHeight + 2
+		self.popover.title = vanilla.TextBox((10, 8, -10, 17), title)
+		self.popover.text = vanilla.TextBox((10, 30, -10, textHeight), info, sizeStyle="small")
+		y = 30 + textHeight + 2
 		if runAvailable:
 			self.popover.runButton = vanilla.Button(
-				(10, y, -10, 18), "▶ Open %s" % run.get("label", "tool"), sizeStyle="small",
+				(10, y, -10, 18), "Open %s" % run.get("label", "tool"), sizeStyle="small",
 				callback=lambda sender, c=check: self.runToolClicked(c),
 			)
 			y += 24
