@@ -21,7 +21,7 @@ from GlyphsApp.plugins import GeneralPlugin
 from AppKit import (
 	NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont,
 	NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName,
-	NSButton, NSCursor, NSBezierPath, NSNotificationCenter, NSObject,
+	NSButton, NSNotificationCenter,
 	NSMutableParagraphStyle, NSParagraphStyleAttributeName,
 )
 
@@ -62,39 +62,6 @@ except objc.error:
 	class FECFlippedDocumentView(NSView):
 		def isFlipped(self):
 			return True
-
-
-# The hamburger grip on category headers in edit mode: grab it and drop the
-# category where it should go. The reorder commits on mouse-up.
-try:
-	FECDragHandleView = objc.lookUpClass("FECDragHandleView")
-except objc.error:
-	class FECDragHandleView(NSView):
-		def drawRect_(self, rect):
-			NSColor.tertiaryLabelColor().set()
-			width = self.bounds().size.width
-			for lineY in (4.5, 7.5, 10.5):
-				NSBezierPath.strokeLineFromPoint_toPoint_((3, lineY), (width - 3, lineY))
-
-		def mouseDown_(self, event):
-			NSCursor.closedHandCursor().push()
-			plugin = getattr(self, "plugin", None)
-			catId = getattr(self, "catId", None)
-			if plugin is not None and catId is not None:
-				plugin.dragBegan(catId, event)
-
-		def mouseDragged_(self, event):
-			plugin = getattr(self, "plugin", None)
-			catId = getattr(self, "catId", None)
-			if plugin is not None and catId is not None:
-				plugin.dragMoved(catId, event)
-
-		def mouseUp_(self, event):
-			NSCursor.pop()
-			plugin = getattr(self, "plugin", None)
-			catId = getattr(self, "catId", None)
-			if plugin is not None and catId is not None:
-				plugin.dragEnded(catId, event)
 
 
 class FontEngineeringChecklist(GeneralPlugin):
@@ -274,30 +241,13 @@ class FontEngineeringChecklist(GeneralPlugin):
 		triangleClosed = self.discloseTriangleImage(0)
 		triangleOpen = self.discloseTriangleImage(1)
 
-		self._headerSlots = []
-		self._dragHandles = []
-		self._categoryBlocks = []
 		group = vanilla.Group((0, 0, contentWidth, height))
-		groupNSView = group.getNSView()
 		y = 6
 		for category, catChecks, isCollapsed in layout:
 			catId = category["id"]
 			safeCat = self.safeAttr(catId)
-			self._headerSlots.append((catId, y))
-			blockTop = y
-			catViews = [] if self.editMode else None
 
-			if self.editMode:
-				# The hamburger grip swaps in for the triangle, same slot —
-				# grab it to reorder the category (live while dragging).
-				handle = FECDragHandleView.alloc().initWithFrame_((
-					(MARGIN - 4, height - (y + 6) - 16), (16, 16)))
-				handle.plugin = self
-				handle.catId = catId
-				groupNSView.addSubview_(handle)
-				self._dragHandles.append(handle)
-				catViews.append(handle)
-			else:
+			if not self.editMode:
 				disclose = vanilla.ImageButton(
 					(MARGIN - 4, y + 6, 16, 16),
 					imageObject=(triangleClosed if isCollapsed else triangleOpen),
@@ -306,27 +256,34 @@ class FontEngineeringChecklist(GeneralPlugin):
 				)
 				setattr(group, "disclose_%s" % safeCat, disclose)
 
-			label = vanilla.TextBox((MARGIN + 16, y + 8, -130, 15), category["name"], sizeStyle="small")
+			label = vanilla.TextBox((MARGIN + 16, y + 8, -150, 15), category["name"], sizeStyle="small")
 			label.getNSTextField().setFont_(NSFont.boldSystemFontOfSize_(NSFont.smallSystemFontSize()))
 			setattr(group, "label_%s" % safeCat, label)
+
+			if self.editMode:
+				up = vanilla.Button(
+					(-133, y + 6, 18, 17), "↑", sizeStyle="small",
+					callback=lambda sender, cid=catId: self.moveCategory(cid, -1),
+				)
+				up.getNSButton().setBordered_(False)
+				setattr(group, "up_%s" % safeCat, up)
+				down = vanilla.Button(
+					(-115, y + 6, 18, 17), "↓", sizeStyle="small",
+					callback=lambda sender, cid=catId: self.moveCategory(cid, 1),
+				)
+				down.getNSButton().setBordered_(False)
+				setattr(group, "down_%s" % safeCat, down)
 
 			countBox = vanilla.TextBox((-80, y + 9, -(MARGIN - 2), 14), "", alignment="right", sizeStyle="small")
 			setattr(group, "count_%s" % safeCat, countBox)
 			self.catCountBoxes[catId] = countBox
-			if catViews is not None:
-				catViews.append(label._nsObject)
-				catViews.append(countBox._nsObject)
 			y += HEADER_HEIGHT
 
 			if not isCollapsed:
 				for check in catChecks:
-					self.buildRow(group, check, states, font, hidden, y, collect=catViews)
+					self.buildRow(group, check, states, font, hidden, y)
 					y += ROW_HEIGHT
 			y += 4
-			if catViews is not None:
-				self._categoryBlocks.append({
-					"catId": catId, "top": blockTop, "height": y - blockTop, "views": catViews,
-				})
 
 		documentView = FECFlippedDocumentView.alloc().initWithFrame_(((0, 0), (contentWidth, height)))
 		documentView.setAutoresizingMask_(NS_VIEW_WIDTH_SIZABLE)
@@ -379,7 +336,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 			pass
 
 	@objc.python_method
-	def buildRow(self, group, check, states, font, hidden, y, collect=None):
+	def buildRow(self, group, check, states, font, hidden, y):
 		# The title is always its own text column at a fixed x, so swapping the
 		# control (checkbox vs. eye) never shifts the text.
 		safeCheck = self.safeAttr(check["id"])
@@ -405,8 +362,6 @@ class FontEngineeringChecklist(GeneralPlugin):
 				)
 				eye.getNSButton().setBordered_(False)
 			setattr(group, "eye_%s" % safeCheck, eye)
-			if collect is not None:
-				collect.append(eye._nsObject)
 		else:
 			state = states.get(check["id"], 0)
 			box = vanilla.CheckBox(
@@ -427,8 +382,6 @@ class FontEngineeringChecklist(GeneralPlugin):
 		if self.editMode and isHidden:
 			label.getNSTextField().setTextColor_(NSColor.secondaryLabelColor())
 		setattr(group, "title_%s" % safeCheck, label)
-		if collect is not None:
-			collect.append(label._nsObject)
 
 		if self.editMode:
 			if check.get("custom"):
@@ -442,8 +395,6 @@ class FontEngineeringChecklist(GeneralPlugin):
 				removeNSButton.setBordered_(False)
 				removeNSButton.setAttributedTitle_(removeTitle)
 				setattr(group, "remove_%s" % safeCheck, remove)
-				if collect is not None:
-					collect.append(remove._nsObject)
 		else:
 			info = vanilla.Button(
 				(-(MARGIN + 16), y + 4, 16, 16), "ⓘ", sizeStyle="small",
@@ -492,85 +443,14 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.rebuildList()
 
 	@objc.python_method
-	def mouseYInContent(self, event):
-		documentView = self.w.scroll.getNSScrollView().documentView()
-		return documentView.convertPoint_fromView_(event.locationInWindow(), None).y
-
-	@objc.python_method
-	def dragBegan(self, catId, event):
-		blocks = getattr(self, "_categoryBlocks", None) or []
-		if not any(b["catId"] == catId for b in blocks):
-			self._drag = None
+	def moveCategory(self, catId, delta):
+		order = [c["id"] for c in self.orderedCategories()]
+		i = order.index(catId)
+		j = i + delta
+		if j < 0 or j >= len(order):
 			return
-		try:
-			startY = self.mouseYInContent(event)
-		except Exception:
-			self._drag = None
-			return
-		origFrames = {}
-		for block in blocks:
-			for view in block["views"]:
-				origFrames[view] = view.frame().origin
-		self._drag = {
-			"catId": catId,
-			"startY": startY,
-			"blocks": blocks,
-			"origFrames": origFrames,
-			"order": [b["catId"] for b in blocks],
-		}
-
-	@objc.python_method
-	def dragMoved(self, catId, event):
-		"""Live reorder: the grabbed section follows the mouse, the others
-		make room instantly. Nothing is rebuilt until the drop."""
-		drag = getattr(self, "_drag", None)
-		if not drag or drag["catId"] != catId:
-			return
-		try:
-			mouseY = self.mouseYInContent(event)
-		except Exception:
-			return
-		dy = mouseY - drag["startY"]
-		blocks = drag["blocks"]
-		origFrames = drag["origFrames"]
-		dragged = next(b for b in blocks if b["catId"] == catId)
-		others = [b for b in blocks if b["catId"] != catId]
-
-		# The grabbed section follows the mouse. (Frames are bottom-based,
-		# our y bookkeeping is top-based, hence the minus.)
-		for view in dragged["views"]:
-			origin = origFrames[view]
-			view.setFrameOrigin_((origin.x, origin.y - dy))
-
-		# Stack the other sections without the dragged one, find the slot the
-		# dragged center falls into, and open a gap there.
-		draggedCenter = dragged["top"] + dy + dragged["height"] / 2.0
-		stackTop = min(b["top"] for b in blocks)
-		stacked = []
-		runningTop = stackTop
-		for block in others:
-			stacked.append((block, runningTop))
-			runningTop += block["height"]
-		index = sum(1 for block, top in stacked if top + block["height"] / 2.0 < draggedCenter)
-		for i, (block, top) in enumerate(stacked):
-			newTop = top if i < index else top + dragged["height"]
-			shift = newTop - block["top"]
-			for view in block["views"]:
-				origin = origFrames[view]
-				view.setFrameOrigin_((origin.x, origin.y - shift))
-
-		order = [b["catId"] for b in others]
-		order.insert(index, catId)
-		drag["order"] = order
-
-	@objc.python_method
-	def dragEnded(self, catId, event):
-		drag = getattr(self, "_drag", None)
-		self._drag = None
-		if drag and drag.get("order"):
-			order = list(drag["order"])
-			order += [c["id"] for c in self.orderedCategories() if c["id"] not in order]
-			Glyphs.defaults[ORDER_KEY] = order
+		order[i], order[j] = order[j], order[i]
+		Glyphs.defaults[ORDER_KEY] = order
 		self.rebuildList()
 
 	@objc.python_method
