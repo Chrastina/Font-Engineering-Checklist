@@ -256,23 +256,25 @@ class FontEngineeringChecklist(GeneralPlugin):
 				)
 				setattr(group, "disclose_%s" % safeCat, disclose)
 
-			label = vanilla.TextBox((MARGIN + 16, y + 8, -150, 15), category["name"], sizeStyle="small")
-			label.getNSTextField().setFont_(NSFont.boldSystemFontOfSize_(NSFont.smallSystemFontSize()))
-			setattr(group, "label_%s" % safeCat, label)
-
 			if self.editMode:
+				# The arrows live in the triangle's slot, narrow enough that
+				# the category name keeps its exact position.
 				up = vanilla.Button(
-					(-133, y + 6, 18, 17), "↑", sizeStyle="small",
+					(1, y + 6, 14, 17), "↑", sizeStyle="small",
 					callback=lambda sender, cid=catId: self.moveCategory(cid, -1),
 				)
 				up.getNSButton().setBordered_(False)
 				setattr(group, "up_%s" % safeCat, up)
 				down = vanilla.Button(
-					(-115, y + 6, 18, 17), "↓", sizeStyle="small",
+					(15, y + 6, 14, 17), "↓", sizeStyle="small",
 					callback=lambda sender, cid=catId: self.moveCategory(cid, 1),
 				)
 				down.getNSButton().setBordered_(False)
 				setattr(group, "down_%s" % safeCat, down)
+
+			label = vanilla.TextBox((MARGIN + 16, y + 8, -150, 15), category["name"], sizeStyle="small")
+			label.getNSTextField().setFont_(NSFont.boldSystemFontOfSize_(NSFont.smallSystemFontSize()))
+			setattr(group, "label_%s" % safeCat, label)
 
 			countBox = vanilla.TextBox((-80, y + 9, -(MARGIN - 2), 14), "", alignment="right", sizeStyle="small")
 			setattr(group, "count_%s" % safeCat, countBox)
