@@ -12,7 +12,7 @@ The checklist has 7 categories — Font Setup, Vertical Metrics, Drawing, Compon
 
 There are three kinds of checks:
 
-- **Checker checks** have a button that verifies the font programmatically. Only deterministic checks get a button — nothing that could cry wolf. If a check fails, a new tab opens with the offending glyphs plus a short report of what failed. If it passes, the checkmark ticks itself (in a distinct color, so you can tell verified from manually ticked).
+- **Checker checks** have a *Run Check* button in their info box that verifies the font programmatically. Only deterministic checks get one — nothing that could cry wolf. If a check fails, a new tab opens with the offending glyphs plus a short report of what failed. If it passes, the checkmark ticks itself in green, so you can tell verified from manually ticked.
 - **Tool checks** point you to an existing plugin or script that already does the job well (Red Arrow, Touché, mekkablue scripts…). We deliberately don't reinvent those — the info box opens the tool directly if it's installed, and links to where to get it if not.
 - **Manual checks** are your eyes and judgment. The info box explains what to look for.
 
@@ -53,8 +53,8 @@ The checklist content lives in [`checks.json`](FontEngineeringChecklist.glyphsPl
 
 - **Phase 0 — scaffold** ✓ repo, plugin bundle, full checklist data
 - **Phase 1 — usable checklist** ✓ window UI with categories, checkboxes, progress bar, info popovers, per-font persistence, show/hide, custom checks
-- **Phase 2 — first checkers**: the pure data queries (font info, PS name length, metrics keys in sync, tabular widths, small caps coverage…) plus the failure-report pattern
-- **Phase 3 — remaining checkers**: vertical metrics comparisons, anchors, carets, contour directions…
+- **Phase 2 — first checkers** ✓ Run Check in the info box: font info, PS name length, weight/width classes, Vendor ID, metrics keys in sync, tabular widths — plus the pass/fail machinery (green verified ticks, failure report tabs)
+- **Phase 3 — remaining checkers**: vertical metrics comparisons, small caps coverage, stylistic sets, anchors, carets, contour directions…
 - **Phase 4 — release**: polish, docs, beta testers, Plugin Manager registration
 
 ## Tools this checklist recommends

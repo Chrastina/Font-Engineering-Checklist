@@ -31,6 +31,14 @@ try:
 except ImportError:
 	HAS_VANILLA = False
 
+# The checker functions live next to this file; the unique module name avoids
+# collisions with other plugins doing the same sys.path trick.
+import sys
+_RESOURCES_DIR = os.path.dirname(__file__)
+if _RESOURCES_DIR not in sys.path:
+	sys.path.insert(0, _RESOURCES_DIR)
+import fec_checkers
+
 # Stable identifier for state saved inside .glyphs files (font.userData).
 # NEVER change this string — users' saved checklist state depends on it.
 USERDATA_KEY = "com.michalchrastina.FontEngineeringChecklist"
@@ -370,6 +378,8 @@ class FontEngineeringChecklist(GeneralPlugin):
 				value=state > 0, sizeStyle="small",
 				callback=lambda sender, cid=check["id"]: self.checkToggled(sender, cid),
 			)
+			if state == STATE_VERIFIED:
+				self.tintCheckbox(box, verified=True)
 			if font is None:
 				box.enable(False)
 			setattr(group, "check_%s" % safeCheck, box)
@@ -420,6 +430,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 			sender.set(False)
 			return
 		newState = STATE_CHECKED if sender.get() else STATE_UNCHECKED
+		self.tintCheckbox(sender, verified=False)
 		self.setState(font, checkId, newState)
 		self.updateCounts()
 
@@ -523,8 +534,8 @@ class FontEngineeringChecklist(GeneralPlugin):
 		links = check.get("links", []) or []
 		run = check.get("run")
 
-		# One action only: the Open button when the tool is installed, the
-		# download link when it is not.
+		# One action only for tools: the Open button when the tool is
+		# installed, the download link when it is not.
 		runAvailable = False
 		if run:
 			try:
@@ -533,16 +544,26 @@ class FontEngineeringChecklist(GeneralPlugin):
 				runAvailable = False
 		if runAvailable:
 			links = []
+		# Build checks get a Run Check button when their checker exists.
+		checkerName = check.get("checker") if check.get("type") == "build" else None
+		checkerAvailable = bool(checkerName) and fec_checkers.has(checkerName)
+		actionCount = (1 if runAvailable else 0) + (1 if checkerAvailable else 0)
 
 		width = 320
 		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
-		height = 10 + 22 + textHeight + (24 if runAvailable else 0) + len(links) * 24 + 8
+		height = 10 + 22 + textHeight + actionCount * 24 + len(links) * 24 + 8
 
 		self.popover = vanilla.Popover((width, height), behavior="transient")
 		self.popoverCheckId = checkId
 		self.popover.title = vanilla.TextBox((10, 8, -10, 17), title)
 		self.popover.text = vanilla.TextBox((10, 30, -10, textHeight), info, sizeStyle="small")
 		y = 30 + textHeight + 2
+		if checkerAvailable:
+			self.popover.checkButton = vanilla.Button(
+				(10, y, -10, 18), "Run Check", sizeStyle="small",
+				callback=lambda sender, c=check: self.runCheckerClicked(c),
+			)
+			y += 24
 		if runAvailable:
 			self.popover.runButton = vanilla.Button(
 				(10, y, -10, 18), "Open %s" % run.get("label", "tool"), sizeStyle="small",
@@ -567,6 +588,47 @@ class FontEngineeringChecklist(GeneralPlugin):
 	@objc.python_method
 	def openURL(self, url):
 		NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(url))
+
+	# ------------------------------------------------------------- checkers
+
+	@objc.python_method
+	def runCheckerClicked(self, check):
+		font = Glyphs.font
+		if font is None:
+			Message(title="No font open", message="Open a font first, then run the check.")
+			return
+		try:
+			passed, summary, layers = fec_checkers.run(check["checker"], font)
+		except Exception as error:
+			Message(title="Checker error", message="%s failed to run: %s" % (check["title"], error))
+			return
+		if passed:
+			self.setState(font, check["id"], STATE_VERIFIED)
+			box = self.checkboxRefs.get(check["id"])
+			if box is not None:
+				box.set(True)
+				self.tintCheckbox(box, verified=True)
+			self.updateCounts()
+			if self.popover is not None:
+				try:
+					self.popover.close()
+				except Exception:
+					pass
+			Glyphs.showNotification("Font Engineering Checklist", "✓ %s" % check["title"])
+		else:
+			if layers:
+				tab = font.newTab()
+				tab.layers = layers
+			Message(title=check["title"], message=summary)
+
+	@objc.python_method
+	def tintCheckbox(self, box, verified):
+		# Verified-by-checker ticks are green; manual ticks keep the accent.
+		try:
+			nsButton = box.getNSButton()
+			nsButton.setContentTintColor_(NSColor.systemGreenColor() if verified else None)
+		except AttributeError:
+			pass
 
 	# ------------------------------------------------------------- tool launch
 
