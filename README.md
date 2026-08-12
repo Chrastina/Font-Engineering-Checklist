@@ -13,7 +13,7 @@ The checklist has 7 categories — Font Setup, Vertical Metrics, Drawing, Compon
 There are three kinds of checks:
 
 - **Checker checks** have a button that verifies the font programmatically. Only deterministic checks get a button — nothing that could cry wolf. If a check fails, a new tab opens with the offending glyphs plus a short report of what failed. If it passes, the checkmark ticks itself (in a distinct color, so you can tell verified from manually ticked).
-- **Tool checks** point you to an existing plugin or script that already does the job well (Red Arrow, Touché, mekkablue scripts…). We deliberately don't reinvent those — the info box tells you what to use and where to get it.
+- **Tool checks** point you to an existing plugin or script that already does the job well (Red Arrow, Touché, mekkablue scripts…). We deliberately don't reinvent those — the info box opens the tool directly if it's installed, and links to where to get it if not.
 - **Manual checks** are your eyes and judgment. The info box explains what to look for.
 
 Other behavior:

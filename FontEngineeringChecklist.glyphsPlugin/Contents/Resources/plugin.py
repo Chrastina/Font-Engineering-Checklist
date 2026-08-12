@@ -19,7 +19,7 @@ import objc
 from GlyphsApp import Glyphs, WINDOW_MENU, DOCUMENTOPENED, DOCUMENTACTIVATED, DOCUMENTCLOSED, Message
 from GlyphsApp.plugins import GeneralPlugin
 from AppKit import (
-	NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont,
+	NSApp, NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont,
 	NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName,
 	NSButton, NSNotificationCenter,
 	NSMutableParagraphStyle, NSParagraphStyleAttributeName,
@@ -522,16 +522,23 @@ class FontEngineeringChecklist(GeneralPlugin):
 		title = check["title"]
 		info = check.get("info", "") or "No description yet."
 		links = check.get("links", []) or []
+		run = check.get("run")
 
 		width = 320
 		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
-		height = 10 + 18 + textHeight + len(links) * 24 + 8
+		height = 10 + 18 + textHeight + (24 if run else 0) + len(links) * 24 + 8
 
 		self.popover = vanilla.Popover((width, height), behavior="transient")
 		self.popoverCheckId = checkId
 		self.popover.title = vanilla.TextBox((10, 8, -10, 16), title, sizeStyle="small")
 		self.popover.text = vanilla.TextBox((10, 28, -10, textHeight), info, sizeStyle="small")
 		y = 28 + textHeight + 2
+		if run:
+			self.popover.runButton = vanilla.Button(
+				(10, y, -10, 18), "▶ Open %s" % run.get("label", "tool"), sizeStyle="small",
+				callback=lambda sender, c=check: self.runToolClicked(c),
+			)
+			y += 24
 		for i, link in enumerate(links):
 			button = vanilla.Button(
 				(10, y, -10, 18), "↗ %s" % link["label"], sizeStyle="small",
@@ -550,6 +557,70 @@ class FontEngineeringChecklist(GeneralPlugin):
 	@objc.python_method
 	def openURL(self, url):
 		NSWorkspace.sharedWorkspace().openURL_(NSURL.URLWithString_(url))
+
+	# ------------------------------------------------------------- tool launch
+
+	@objc.python_method
+	def runToolClicked(self, check):
+		try:
+			opened = self.runTool(check)
+		except Exception:
+			opened = False
+		if opened:
+			if self.popover is not None:
+				try:
+					self.popover.close()
+				except Exception:
+					pass
+		else:
+			label = (check.get("run") or {}).get("label", "The tool")
+			Message(
+				title="%s not found" % label,
+				message="%s doesn't seem to be installed. Install it via Window > Plugin Manager, or use the link in this info box." % label,
+			)
+
+	@objc.python_method
+	def runTool(self, check):
+		"""Opens the recommended tool directly: activates a reporter plugin or
+		triggers the script/plugin menu item. Returns False when not installed."""
+		run = check.get("run") or {}
+		matches = run.get("match", [])
+		if isinstance(matches, str):
+			matches = [matches]
+		needles = [m.lower().replace(" ", "") for m in matches]
+		if not needles:
+			return False
+		if run.get("type") == "reporter":
+			for reporter in Glyphs.reporters:
+				names = [reporter.__class__.__name__]
+				try:
+					names.append(str(reporter.title()))
+				except Exception:
+					pass
+				haystack = "".join(names).lower().replace(" ", "")
+				if any(needle in haystack for needle in needles):
+					Glyphs.activateReporter(reporter)
+					return True
+			return False
+		if run.get("type") == "menu":
+			item = self.findMenuItem(NSApp.mainMenu(), needles)
+			if item is None:
+				return False
+			NSApp.sendAction_to_from_(item.action(), item.target(), item)
+			return True
+		return False
+
+	@objc.python_method
+	def findMenuItem(self, menu, needles):
+		for item in menu.itemArray():
+			title = str(item.title()).lower().replace(" ", "")
+			if item.action() and any(needle in title for needle in needles):
+				return item
+			if item.hasSubmenu():
+				found = self.findMenuItem(item.submenu(), needles)
+				if found is not None:
+					return found
+		return None
 
 	# ------------------------------------------------------------- custom checks
 

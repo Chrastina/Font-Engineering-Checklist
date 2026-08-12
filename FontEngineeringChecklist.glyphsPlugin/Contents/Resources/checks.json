@@ -1,13 +1,34 @@
 {
 	"schemaVersion": 1,
 	"categories": [
-		{ "id": "font-setup", "name": "Font Setup" },
-		{ "id": "vertical-metrics", "name": "Vertical Metrics" },
-		{ "id": "drawing", "name": "Drawing" },
-		{ "id": "components-diacritics", "name": "Components & Diacritics" },
-		{ "id": "spacing-kerning", "name": "Spacing & Kerning" },
-		{ "id": "features", "name": "Features" },
-		{ "id": "final-qa", "name": "Final QA" }
+		{
+			"id": "font-setup",
+			"name": "Font Setup"
+		},
+		{
+			"id": "vertical-metrics",
+			"name": "Vertical Metrics"
+		},
+		{
+			"id": "drawing",
+			"name": "Drawing"
+		},
+		{
+			"id": "components-diacritics",
+			"name": "Components & Diacritics"
+		},
+		{
+			"id": "spacing-kerning",
+			"name": "Spacing & Kerning"
+		},
+		{
+			"id": "features",
+			"name": "Features"
+		},
+		{
+			"id": "final-qa",
+			"name": "Final QA"
+		}
 	],
 	"checks": [
 		{
@@ -16,7 +37,12 @@
 			"type": "manual",
 			"title": "Set up naming and PostScript names",
 			"info": "Family and style names live in Font Info. Style names use plain title case (Bold Italic, not bold-italic). PostScript names contain no spaces or special characters, and family + style should stay well under 63 characters. The naming guide explains how every name type should be written.",
-			"links": [{ "label": "Glyphs naming tutorial", "url": "https://glyphsapp.com/learn/naming" }]
+			"links": [
+				{
+					"label": "Glyphs naming tutorial",
+					"url": "https://glyphsapp.com/learn/naming"
+				}
+			]
 		},
 		{
 			"id": "style-linking-setup",
@@ -24,7 +50,12 @@
 			"type": "manual",
 			"title": "Set up style linking",
 			"info": "In Font Info > Exports, Bold, Italic and Bold Italic styles should be style-linked to their base style. Other styles stay unlinked unless you have a reason. Whether linking behaves in real apps is a separate check under Final QA.",
-			"links": [{ "label": "Glyphs naming tutorial (style linking section)", "url": "https://glyphsapp.com/learn/naming" }]
+			"links": [
+				{
+					"label": "Glyphs naming tutorial (style linking section)",
+					"url": "https://glyphsapp.com/learn/naming"
+				}
+			]
 		},
 		{
 			"id": "master-locations",
@@ -86,7 +117,12 @@
 			"checker": "vendor_id",
 			"title": "Vendor ID is set",
 			"info": "Checks that the vendorID custom parameter exists and is exactly 4 ASCII characters. Whether it is your registered ID is up to you.",
-			"links": [{ "label": "Microsoft vendor ID list", "url": "https://learn.microsoft.com/en-us/typography/vendors/" }]
+			"links": [
+				{
+					"label": "Microsoft vendor ID list",
+					"url": "https://learn.microsoft.com/en-us/typography/vendors/"
+				}
+			]
 		},
 		{
 			"id": "copyright",
@@ -102,7 +138,6 @@
 			"title": "PANOSE values are intentional or safely neutral",
 			"info": "Unset PANOSE defaults to all zeros ('any'), which is safe. If you set values, make sure the classification is deliberate, not leftover from another project."
 		},
-
 		{
 			"id": "gf-vertical-metrics",
 			"category": "vertical-metrics",
@@ -110,8 +145,14 @@
 			"title": "Vertical metrics follow the Google Fonts strategy (if preferred)",
 			"info": "Google Fonts expects a specific relationship between typo, hhea and win metrics, including a typo line gap of 0. The GF metrics guide explains the strategy; Fontspector verifies it on the compiled binary.",
 			"links": [
-				{ "label": "Google Fonts metrics guide", "url": "https://googlefonts.github.io/gf-guide/metrics.html" },
-				{ "label": "Fontspector", "url": "https://github.com/fonttools/fontspector" }
+				{
+					"label": "Google Fonts metrics guide",
+					"url": "https://googlefonts.github.io/gf-guide/metrics.html"
+				},
+				{
+					"label": "Fontspector",
+					"url": "https://github.com/fonttools/fontspector"
+				}
 			]
 		},
 		{
@@ -138,7 +179,6 @@
 			"title": "Line-spacing is consistent across family styles",
 			"info": "Compares vertical metrics across all currently open fonts — useful for roman vs. italic files of the same family. Open the whole family before running it."
 		},
-
 		{
 			"id": "alignment-zones",
 			"category": "drawing",
@@ -152,7 +192,20 @@
 			"type": "tool",
 			"title": "Stem thickness is consistent",
 			"info": "Vertical stems should be consistent with each other, and likewise horizontals. The Stem Thickness plugin (Plugin Manager) measures stems live under your cursor — judge the numbers yourself.",
-			"links": [{ "label": "Stem Thickness plugin", "url": "https://github.com/RafalBuchner/StemThickness" }]
+			"links": [
+				{
+					"label": "Stem Thickness plugin",
+					"url": "https://github.com/RafalBuchner/StemThickness"
+				}
+			],
+			"run": {
+				"type": "reporter",
+				"match": [
+					"StemThickness",
+					"Stem Thickness"
+				],
+				"label": "Stem Thickness"
+			}
 		},
 		{
 			"id": "almost-straight",
@@ -160,7 +213,20 @@
 			"type": "tool",
 			"title": "No almost-straight segments",
 			"info": "Curve segments that are nearly but not exactly straight are usually drawing mistakes. Red Arrow (Plugin Manager) flags them directly in the edit view.",
-			"links": [{ "label": "Red Arrow", "url": "https://github.com/jenskutilek/RedArrow.glyphs" }]
+			"links": [
+				{
+					"label": "Red Arrow",
+					"url": "https://github.com/jenskutilek/RedArrow.glyphs"
+				}
+			],
+			"run": {
+				"type": "reporter",
+				"match": [
+					"RedArrow",
+					"Red Arrow"
+				],
+				"label": "Red Arrow"
+			}
 		},
 		{
 			"id": "kinks",
@@ -168,7 +234,19 @@
 			"type": "tool",
 			"title": "No kinks in outlines",
 			"info": "Kinks appear at smooth connections when interpolation bends them. Run Kink Finder from the mekkablue scripts collection.",
-			"links": [{ "label": "mekkablue scripts", "url": "https://github.com/mekkablue/Glyphs-Scripts" }]
+			"links": [
+				{
+					"label": "mekkablue scripts",
+					"url": "https://github.com/mekkablue/Glyphs-Scripts"
+				}
+			],
+			"run": {
+				"type": "menu",
+				"match": [
+					"Kink Finder"
+				],
+				"label": "Kink Finder"
+			}
 		},
 		{
 			"id": "extrema",
@@ -176,7 +254,20 @@
 			"type": "tool",
 			"title": "Points are placed at extrema",
 			"info": "Missing extremes hurt rendering, hinting and interpolation. Red Arrow (Plugin Manager) flags missing extrema in the edit view.",
-			"links": [{ "label": "Red Arrow", "url": "https://github.com/jenskutilek/RedArrow.glyphs" }]
+			"links": [
+				{
+					"label": "Red Arrow",
+					"url": "https://github.com/jenskutilek/RedArrow.glyphs"
+				}
+			],
+			"run": {
+				"type": "reporter",
+				"match": [
+					"RedArrow",
+					"Red Arrow"
+				],
+				"label": "Red Arrow"
+			}
 		},
 		{
 			"id": "zero-handles",
@@ -184,7 +275,20 @@
 			"type": "tool",
 			"title": "No zero handles",
 			"info": "Fully retracted handles break rendering and interpolation. Red Arrow (Plugin Manager) flags them in the edit view.",
-			"links": [{ "label": "Red Arrow", "url": "https://github.com/jenskutilek/RedArrow.glyphs" }]
+			"links": [
+				{
+					"label": "Red Arrow",
+					"url": "https://github.com/jenskutilek/RedArrow.glyphs"
+				}
+			],
+			"run": {
+				"type": "reporter",
+				"match": [
+					"RedArrow",
+					"Red Arrow"
+				],
+				"label": "Red Arrow"
+			}
 		},
 		{
 			"id": "terminals",
@@ -229,16 +333,39 @@
 			"type": "manual",
 			"title": "Relevant space characters are added",
 			"info": "Figure space, thin space, hair space, no-break space etc. The Build Space Glyphs script from the mekkablue collection adds them with correct, metrics-keyed widths.",
-			"links": [{ "label": "mekkablue scripts", "url": "https://github.com/mekkablue/Glyphs-Scripts" }]
+			"links": [
+				{
+					"label": "mekkablue scripts",
+					"url": "https://github.com/mekkablue/Glyphs-Scripts"
+				}
+			],
+			"run": {
+				"type": "menu",
+				"match": [
+					"Build Space Glyphs"
+				],
+				"label": "Build Space Glyphs"
+			}
 		},
-
 		{
 			"id": "nested-flipped-components",
 			"category": "components-diacritics",
 			"type": "tool",
 			"title": "No nested or flipped components",
 			"info": "Nested components (components of components) and flipped components can misbehave in interpolation and export. Component Problem Finder from the mekkablue scripts collection reports them, and more.",
-			"links": [{ "label": "mekkablue scripts", "url": "https://github.com/mekkablue/Glyphs-Scripts" }]
+			"links": [
+				{
+					"label": "mekkablue scripts",
+					"url": "https://github.com/mekkablue/Glyphs-Scripts"
+				}
+			],
+			"run": {
+				"type": "menu",
+				"match": [
+					"Component Problem Finder"
+				],
+				"label": "Component Problem Finder"
+			}
 		},
 		{
 			"id": "diacritic-alignment",
@@ -263,7 +390,6 @@
 			"title": "Ligature carets are set up",
 			"info": "Ligatures need caret anchors (caret_1, caret_2…) so text editors can place the cursor between the components. The checker verifies every exporting ligature has them."
 		},
-
 		{
 			"id": "metrics-keys-sync",
 			"category": "spacing-kerning",
@@ -278,7 +404,20 @@
 			"type": "tool",
 			"title": "No characters are touching",
 			"info": "Touché scans the font for glyph pairs that touch or overlap and lists them in a tab.",
-			"links": [{ "label": "Touché", "url": "https://github.com/yanone/Touche" }]
+			"links": [
+				{
+					"label": "Touché",
+					"url": "https://github.com/yanone/Touche"
+				}
+			],
+			"run": {
+				"type": "menu",
+				"match": [
+					"Touché",
+					"Touche"
+				],
+				"label": "Touché"
+			}
 		},
 		{
 			"id": "brace-bracket-kerning",
@@ -293,7 +432,12 @@
 			"type": "tool",
 			"title": "No tiny kerning pairs",
 			"info": "Pairs under roughly 5 units add file size without visible effect — consider deleting them. The mekkablue scripts collection has kerning cleanup scripts for exactly this.",
-			"links": [{ "label": "mekkablue scripts", "url": "https://github.com/mekkablue/Glyphs-Scripts" }]
+			"links": [
+				{
+					"label": "mekkablue scripts",
+					"url": "https://github.com/mekkablue/Glyphs-Scripts"
+				}
+			]
 		},
 		{
 			"id": "overkerns",
@@ -301,7 +445,19 @@
 			"type": "tool",
 			"title": "No overkerns",
 			"info": "Run 'New Tab with Overkerned Pairs' from the mekkablue scripts collection to list pairs that kern more than a set percentage of the glyph widths.",
-			"links": [{ "label": "mekkablue scripts", "url": "https://github.com/mekkablue/Glyphs-Scripts" }]
+			"links": [
+				{
+					"label": "mekkablue scripts",
+					"url": "https://github.com/mekkablue/Glyphs-Scripts"
+				}
+			],
+			"run": {
+				"type": "menu",
+				"match": [
+					"New Tab with Overkerned Pairs"
+				],
+				"label": "Overkerned Pairs"
+			}
 		},
 		{
 			"id": "extension-kerning",
@@ -310,7 +466,6 @@
 			"title": "Consider if extension kerning is relevant",
 			"info": "Consider kerning beyond the core alphabet: punctuation, figures, brackets and other extensions of your kerning classes."
 		},
-
 		{
 			"id": "ss-named",
 			"category": "features",
@@ -358,14 +513,18 @@
 			"title": "Fractions use suitable numerator, denominator and slash placement",
 			"info": "Check that numerators, denominators and the fraction slash align and space correctly, both in precomposed fractions and via the frac feature."
 		},
-
 		{
 			"id": "language-coverage",
 			"category": "final-qa",
 			"type": "tool",
 			"title": "Intended language coverage is actually covered",
 			"info": "Hyperglot checks which languages your character set actually supports — intent and reality often differ.",
-			"links": [{ "label": "Hyperglot", "url": "https://hyperglot.rosettatype.com/" }]
+			"links": [
+				{
+					"label": "Hyperglot",
+					"url": "https://hyperglot.rosettatype.com/"
+				}
+			]
 		},
 		{
 			"id": "style-linking-apps",
@@ -394,7 +553,12 @@
 			"type": "tool",
 			"title": "Files pass Fontspector",
 			"info": "Run the compiled binaries through Fontspector for binary-level QA that this plugin cannot see from the source file.",
-			"links": [{ "label": "Fontspector", "url": "https://github.com/fonttools/fontspector" }]
+			"links": [
+				{
+					"label": "Fontspector",
+					"url": "https://github.com/fonttools/fontspector"
+				}
+			]
 		}
 	]
 }
