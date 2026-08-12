@@ -36,7 +36,7 @@
 			"category": "font-setup",
 			"type": "manual",
 			"title": "Set up naming and PostScript names",
-			"info": "Family and style names live in Font Info. Style names use plain title case (Bold Italic, not bold-italic). PostScript names contain no spaces or special characters, and family + style should stay well under 63 characters. The naming guide explains how every name type should be written.",
+			"info": "Fill in the family name, style names and PostScript names in Font Info. Style names use plain title case (Bold Italic, not bold-italic), PostScript names carry no spaces or special characters, and family plus style should stay well under 63 characters.\n\nNames are what operating systems and apps use to group and find the family, so mistakes here surface everywhere at once. The Glyphs naming tutorial covers how each name type should be written.",
 			"links": [
 				{
 					"label": "Glyphs naming tutorial",
@@ -49,7 +49,7 @@
 			"category": "font-setup",
 			"type": "build",
 			"title": "Set up style linking",
-			"info": "In Font Info > Exports, Bold, Italic and Bold Italic styles should be style-linked to their base style. Other styles stay unlinked unless you have a reason. Whether linking behaves in real apps is a separate check under Final QA.",
+			"info": "In Font Info > Exports, link the Bold, Italic and Bold Italic instances to their base style. Other styles stay unlinked unless there is a reason.\n\nStyle linking is what makes the Bold and Italic buttons in Word or InDesign pick the right file. Whether it behaves in real apps is a separate check under Final QA.",
 			"links": [
 				{
 					"label": "Glyphs naming tutorial (style linking section)",
@@ -62,24 +62,24 @@
 			"id": "master-locations",
 			"category": "font-setup",
 			"type": "build",
-			"title": "Master locations are correctly defined in the designspace",
-			"info": "Check Font Info > Masters: each master's axis coordinates should sit where you intend them, and all instances should fall inside the range the masters span.",
+			"title": "Place the masters correctly in the designspace",
+			"info": "Give every master its intended axis coordinates in Font Info > Masters, and keep all instances inside the range the masters span.\n\nTwo masters at the same location, or an axis with masters at only one position, cannot interpolate. Instances outside the range have to be extrapolated, which distorts shapes.",
 			"checker": "master_locations"
 		},
 		{
 			"id": "default-master",
 			"category": "font-setup",
 			"type": "build",
-			"title": "Default master matches the intended style",
-			"info": "The default (origin) of a variable font is what apps show before any axis is touched. Make sure it is the style you want as the default, e.g. via the Variable Font Origin custom parameter.",
+			"title": "Confirm the default master is the intended style",
+			"info": "Check which master is the origin of the variable font — the Variable Font Origin custom parameter, or the first master when none is set.\n\nThe origin is what apps show before any axis is touched, and what a fallback renderer uses. It should be the style the family is meant to lead with.",
 			"checker": "default_master"
 		},
 		{
 			"id": "use-typo-metrics",
 			"category": "font-setup",
 			"type": "build",
-			"title": "Add 'Use Typo Metrics'",
-			"info": "Add the Use Typo Metrics custom parameter in Font Info > Font (fsSelection bit 7). Apps then use typo metrics instead of win metrics for line spacing — recommended, and required by Google Fonts.",
+			"title": "Add the 'Use Typo Metrics' parameter",
+			"info": "Add Use Typo Metrics in Font Info > Font, and make sure the typo metrics themselves are filled in.\n\nWith this set (fsSelection bit 7), apps use the typo values for line spacing instead of the win values, which is the consistent choice across platforms and a Google Fonts requirement.",
 			"checker": "use_typo_metrics"
 		},
 		{
@@ -87,40 +87,40 @@
 			"category": "font-setup",
 			"type": "build",
 			"checker": "font_info_complete",
-			"title": "Version number and font info are complete",
-			"info": "Verifies that the version number is sane and that designer, manufacturer and license fields are filled in. Whether the contents are correct stays your call."
+			"title": "Complete the version number and font info",
+			"info": "Set a release version number and fill in designer, manufacturer, copyright and license in Font Info.\n\nThese fields travel inside every exported file and show up in font managers, licensing tools and Get Info panels. Empty ones look unfinished and make the font hard to trace."
 		},
 		{
 			"id": "ps-name-length",
 			"category": "font-setup",
 			"type": "build",
 			"checker": "ps_name_length",
-			"title": "PostScript names are within length limits",
-			"info": "The PostScript font name (family + style) must stay at or under 63 characters; some older environments prefer under 31. The checker measures every exporting instance."
+			"title": "Keep PostScript names within the length limits",
+			"info": "Check that the PostScript name of every exporting instance stays at or under 63 characters.\n\nLonger names break in older environments and some PDF workflows; under 31 characters is safer still if the family has to work in legacy applications."
 		},
 		{
 			"id": "weight-width-classes",
 			"category": "font-setup",
 			"type": "build",
 			"checker": "weight_width_classes",
-			"title": "Weight and width names match weight and width classes",
-			"info": "Compares each instance's style name against its weight class and width class values — e.g. an instance called Light should carry weight class 300."
+			"title": "Match weight and width names to their classes",
+			"info": "Check that each instance's weight class and width class agree with its style name — Light should carry 300, Condensed should carry 3.\n\nApps sort and substitute styles by these numbers, not by the name. A mismatch puts styles in the wrong order in menus, or makes two styles look identical to the system."
 		},
 		{
 			"id": "vf-name-conflict",
 			"category": "font-setup",
 			"type": "build",
 			"checker": "vf_name_conflict",
-			"title": "Variable font names do not conflict with static fonts",
-			"info": "If statics and a variable font ship from the same file, the variable font needs its own family name (Variable Font Family Name custom parameter), otherwise installations collide."
+			"title": "Keep variable font names apart from the statics",
+			"info": "When statics and a variable font ship from the same file, give the variable font its own family name with the Variable Font Family Name parameter.\n\nInstalling both under one family name makes them collide: the operating system picks one and quietly ignores the other, which is hard to diagnose later."
 		},
 		{
 			"id": "vendor-id",
 			"category": "font-setup",
 			"type": "build",
 			"checker": "vendor_id",
-			"title": "Vendor ID is set",
-			"info": "Checks that the vendorID custom parameter exists and is exactly 4 ASCII characters. Whether it is your registered ID is up to you.",
+			"title": "Set the Vendor ID",
+			"info": "Add the vendorID custom parameter in Font Info > Font. It must be exactly four ASCII characters.\n\nThe vendor ID identifies the foundry in the OS/2 table and appears in font managers. Registering it with Microsoft keeps it unique.",
 			"links": [
 				{
 					"label": "Microsoft vendor ID list",
@@ -132,38 +132,38 @@
 			"id": "copyright",
 			"category": "font-setup",
 			"type": "manual",
-			"title": "Copyright years and ownership are correct",
-			"info": "Check the copyright string in Font Info: right years, right owner, consistent with the license text."
+			"title": "Check the copyright years and ownership",
+			"info": "Read the copyright string in Font Info: correct years, correct owner, consistent with the license text.\n\nThis is the legal notice that ships inside every file. A stale year or a name carried over from another project is easy to miss and awkward to correct after release."
 		},
 		{
 			"id": "panose",
 			"category": "font-setup",
 			"type": "manual",
-			"title": "PANOSE values are intentional or safely neutral",
-			"info": "Unset PANOSE defaults to all zeros ('any'), which is safe. If you set values, make sure the classification is deliberate, not leftover from another project."
+			"title": "Decide the PANOSE values deliberately",
+			"info": "Leave PANOSE unset, which means all zeros ('any'), or set values that genuinely describe the design.\n\nAll zeros is the safe neutral. Values left over from another project mislead the systems that use PANOSE for font matching and substitution."
 		},
 		{
 			"id": "missing-unicodes",
 			"category": "font-setup",
 			"type": "build",
 			"checker": "missing_unicodes",
-			"title": "Glyphs have their expected Unicode values",
-			"info": "Compares each exporting glyph against the Unicode value Glyphs expects for that name. A missing codepoint means the character can't be typed or copied from the font."
+			"title": "Give every glyph its expected Unicode value",
+			"info": "Check that exporting glyphs which should carry a codepoint actually have one.\n\nWithout a Unicode value a glyph cannot be typed, copied or found by a screen reader — it is only reachable through a feature. Glyphs assigns most codepoints automatically from the glyph name."
 		},
 		{
 			"id": "duplicate-unicodes",
 			"category": "font-setup",
 			"type": "build",
 			"checker": "duplicate_unicodes",
-			"title": "No duplicate Unicode values",
-			"info": "Two glyphs claiming the same codepoint silently break the cmap table — only one of them ends up reachable."
+			"title": "Remove duplicate Unicode values",
+			"info": "Check that no two exporting glyphs claim the same codepoint.\n\nThe cmap table maps each codepoint to exactly one glyph, so a duplicate silently makes one of the two unreachable — usually the one nobody tests."
 		},
 		{
 			"id": "gf-vertical-metrics",
 			"category": "vertical-metrics",
 			"type": "tool",
-			"title": "Vertical metrics follow the Google Fonts strategy (if preferred)",
-			"info": "Google Fonts expects a specific relationship between typo, hhea and win metrics, including a typo line gap of 0. The GF metrics guide explains the strategy; Fontspector verifies it on the compiled binary.",
+			"title": "Follow the Google Fonts vertical metrics strategy",
+			"info": "If the project targets Google Fonts, or simply wants one documented strategy, set typo, hhea and win metrics in the specific relationship the Google Fonts guide describes, including a typo line gap of zero.\n\nFollowing one strategy consistently is what makes line spacing identical across macOS, Windows and browsers. Fontspector verifies the result on the compiled binary.",
 			"links": [
 				{
 					"label": "Google Fonts metrics guide",
@@ -180,38 +180,38 @@
 			"category": "vertical-metrics",
 			"type": "build",
 			"checker": "uc_diacritics_clipping",
-			"title": "Uppercase diacritics remain below the clipping boundary",
-			"info": "Measures the tallest glyphs (uppercase diacritics in particular) in every master against the clipping boundary (win metrics, or typo metrics when Use Typo Metrics is set) and reports anything that would clip."
+			"title": "Keep uppercase diacritics below the clipping boundary",
+			"info": "Check that the tallest glyphs — uppercase diacritics in particular — stay inside the win metrics in every master.\n\nWindows applications clip anything above winAscent or below winDescent. The tops of accented capitals are usually the first thing to disappear."
 		},
 		{
 			"id": "vm-across-masters",
 			"category": "vertical-metrics",
 			"type": "build",
 			"checker": "vm_across_masters",
-			"title": "Vertical metrics are identical across all masters",
-			"info": "All masters must share the same vertical metric values, otherwise line spacing shifts between styles of the family."
+			"title": "Keep vertical metrics identical across masters",
+			"info": "Check that every master carries the same vertical metric values.\n\nMetrics that differ between masters make line spacing jump when the weight changes, and produce inconsistent interpolated instances."
 		},
 		{
 			"id": "linespacing-across-styles",
 			"category": "vertical-metrics",
 			"type": "build",
 			"checker": "linespacing_across_styles",
-			"title": "Line-spacing is consistent across family styles",
-			"info": "Compares vertical metrics across all currently open fonts — useful for roman vs. italic files of the same family. Open the whole family before running it."
+			"title": "Keep line spacing consistent across the family",
+			"info": "Compare the vertical metrics of every style — masters, instance overrides, and the other files of the family if they are open.\n\nSetting a paragraph in Regular and switching it to Italic should not change the leading. Roman and italic files drifting apart is the classic cause."
 		},
 		{
 			"id": "alignment-zones",
 			"category": "drawing",
 			"type": "manual",
-			"title": "Shapes correspond to alignment zones",
-			"info": "Overshoots of round shapes should land inside the zones defined in Font Info > Masters, flats on the flat edge. Zones that don't catch your shapes are worse than no zones. This stays a manual read: on real fonts, near-misses are as often deliberate as accidental."
+			"title": "Check that shapes match the alignment zones",
+			"info": "Compare overshoots of round shapes against the zones in Font Info > Masters: overshoots inside the zone, flat shapes on the flat edge.\n\nZones that miss the actual shapes are worse than no zones, because hinting then aligns the wrong outlines. This stays a manual read: on real fonts, near-misses are as often deliberate as accidental."
 		},
 		{
 			"id": "stems",
 			"category": "drawing",
 			"type": "tool",
-			"title": "Stem thickness is consistent",
-			"info": "Vertical stems should be consistent with each other, and likewise horizontals. The Stem Thickness plugin (Plugin Manager) measures stems live under your cursor — judge the numbers yourself.",
+			"title": "Check that stem thickness is consistent",
+			"info": "Compare vertical stems against each other, and horizontals against each other, across the alphabet and across masters.\n\nInconsistent stems read as uneven colour in text. The Stem Thickness reporter measures stems live under the cursor; the judgement stays human, since many designs vary stems on purpose.",
 			"links": [
 				{
 					"label": "Stem Thickness plugin",
@@ -231,8 +231,8 @@
 			"id": "almost-straight",
 			"category": "drawing",
 			"type": "tool",
-			"title": "No almost-straight segments",
-			"info": "Curve segments that are nearly but not exactly straight are usually drawing mistakes. Red Arrow (Plugin Manager) flags them directly in the edit view.",
+			"title": "Check for almost-straight segments",
+			"info": "Look for curve segments that are nearly but not exactly straight, and decide whether they should be true straights.\n\nThey are usually drawing accidents, and they show up as subtle wobble at large sizes. Red Arrow flags them directly in the edit view.",
 			"links": [
 				{
 					"label": "Red Arrow",
@@ -252,8 +252,8 @@
 			"id": "kinks",
 			"category": "drawing",
 			"type": "tool",
-			"title": "No kinks in outlines",
-			"info": "Kinks appear at smooth connections when interpolation bends them. Run Kink Finder from the mekkablue scripts collection.",
+			"title": "Check for kinks in the outlines",
+			"info": "Look for smooth connections that bend where they should stay smooth, especially in interpolated instances.\n\nA kink can be invisible in the masters and obvious halfway between them. Kink Finder reports them across the whole designspace.",
 			"links": [
 				{
 					"label": "mekkablue scripts",
@@ -272,8 +272,8 @@
 			"id": "extrema",
 			"category": "drawing",
 			"type": "tool",
-			"title": "Points are placed at extrema",
-			"info": "Missing extremes hurt rendering, hinting and interpolation. Red Arrow (Plugin Manager) flags missing extrema in the edit view.",
+			"title": "Place points at the extremes",
+			"info": "Check that every curve has nodes at its topmost, bottommost, leftmost and rightmost points.\n\nMissing extremes hurt rendering at small sizes, break hinting, and make interpolation unpredictable. Red Arrow flags them in the edit view.",
 			"links": [
 				{
 					"label": "Red Arrow",
@@ -293,8 +293,8 @@
 			"id": "zero-handles",
 			"category": "drawing",
 			"type": "tool",
-			"title": "No zero handles",
-			"info": "Fully retracted handles break rendering and interpolation. Red Arrow (Plugin Manager) flags them in the edit view.",
+			"title": "Check for zero handles",
+			"info": "Look for offcurve points that sit exactly on their oncurve point — handles retracted to zero length.\n\nThey break rendering in some engines and behave unpredictably in interpolation. Red Arrow flags them in the edit view.",
 			"links": [
 				{
 					"label": "Red Arrow",
@@ -314,45 +314,45 @@
 			"id": "terminals",
 			"category": "drawing",
 			"type": "manual",
-			"title": "Terminals are consistent",
-			"info": "Compare stroke endings across the font: angle, weight and shape should follow one logic."
+			"title": "Check that terminals are consistent",
+			"info": "Compare stroke endings across the font: angle, weight and shape should follow one logic.\n\nTerminals are among the strongest signals of a family's character, so an inconsistent one reads as a mistake rather than a variation."
 		},
 		{
 			"id": "diagonals",
 			"category": "drawing",
 			"type": "manual",
-			"title": "Diagonals are consistent",
-			"info": "Diagonal strokes (v, w, x, y, k…) should share weight and angle logic across the font."
+			"title": "Check that diagonals are consistent",
+			"info": "Compare the diagonal strokes of v, w, x, y, k and their relatives for weight and angle.\n\nDiagonals need optical correction to look as heavy as vertical stems, and that correction has to be applied consistently or the letters fall out of colour."
 		},
 		{
 			"id": "contour-directions",
 			"category": "drawing",
 			"type": "build",
 			"checker": "contour_directions",
-			"title": "Contour directions are correct",
-			"info": "Outer contours and counters must run in the correct directions. Mostly matters for variable fonts — static exports fix direction automatically when overlaps are removed."
+			"title": "Check that path directions are correct",
+			"info": "Check that outer contours and counters run in the correct directions.\n\nWrong directions make counters fill in. Static exports correct this automatically when overlaps are removed, so it matters most for variable fonts, where nothing fixes it at export."
 		},
 		{
 			"id": "notdef",
 			"category": "drawing",
 			"type": "build",
 			"checker": "notdef_drawn",
-			"title": ".notdef is drawn",
-			"info": "Glyphs generates a fallback .notdef at export if you don't have one — this check is for drawing a custom one that matches your design. Verifies the glyph exists and has outlines in every master."
+			"title": "Draw a custom .notdef",
+			"info": "Draw a .notdef glyph in every master rather than leaving it to the automatic fallback.\n\n.notdef is what readers see when a character is missing from the font. Glyphs generates a plain box at export; a custom one matches the design and signals that the gap is intentional."
 		},
 		{
 			"id": "space-width",
 			"category": "drawing",
 			"type": "manual",
-			"title": "Space has an appropriate width",
-			"info": "Test the space in running text at several weights — it should hold words apart without opening holes. Don't forget the no-break space matches it."
+			"title": "Check that the space has an appropriate width",
+			"info": "Test the space in running text at several weights, and check that the no-break space matches it.\n\nThe space sets the rhythm of every line. Too narrow and words run together, too wide and the text opens up into holes — a judgement only reading can settle."
 		},
 		{
 			"id": "space-glyphs",
 			"category": "drawing",
 			"type": "build",
-			"title": "Relevant space characters are added",
-			"info": "Figure space, thin space, hair space, no-break space etc. The Build Space Glyphs script from the mekkablue collection adds them with correct, metrics-keyed widths.",
+			"title": "Add the space characters the font needs",
+			"info": "Check for the standard set: no-break space, figure space, thin space, hair space, em and en space, punctuation space, zero-width space.\n\nLayout applications and web text rely on these for fixed spacing. Build Space Glyphs adds them with correct, metrics-keyed widths.",
 			"links": [
 				{
 					"label": "mekkablue scripts",
@@ -373,23 +373,23 @@
 			"category": "drawing",
 			"type": "build",
 			"checker": "empty_glyphs",
-			"title": "No empty exporting glyphs",
-			"info": "Finds glyphs set to export that have no paths, no components and no width. Almost always an accident — either draw them, give them a width, or switch off export."
+			"title": "Remove empty exporting glyphs",
+			"info": "Check for glyphs set to export that have no paths, no components and no width.\n\nThey are almost always accidents — a glyph added and never drawn. In the font they become invisible zero-width characters that break text unpredictably."
 		},
 		{
 			"id": "brace-layers-designspace",
 			"category": "drawing",
 			"type": "build",
 			"checker": "brace_layers_in_designspace",
-			"title": "Brace layers sit inside the designspace",
-			"info": "A brace layer whose coordinates fall outside the range the masters span never activates — it silently does nothing at export."
+			"title": "Keep brace layers inside the designspace",
+			"info": "Check that every brace layer's coordinates fall inside the range the masters span.\n\nA brace layer outside that range never activates: it silently does nothing at export, and the substitution it was drawn for simply never happens."
 		},
 		{
 			"id": "nested-flipped-components",
 			"category": "components-diacritics",
 			"type": "tool",
-			"title": "No nested or flipped components",
-			"info": "Nested components (components of components) and flipped components can misbehave in interpolation and export. Component Problem Finder from the mekkablue scripts collection reports them, and more.",
+			"title": "Check for nested and flipped components",
+			"info": "Look for components built from other composites, and for components mirrored by a negative scale.\n\nBoth export in unpredictable ways and can break interpolation. Component Problem Finder reports these along with other component trouble.",
 			"links": [
 				{
 					"label": "mekkablue scripts",
@@ -408,39 +408,39 @@
 			"id": "diacritic-alignment",
 			"category": "components-diacritics",
 			"type": "manual",
-			"title": "Diacritics align in base shapes",
-			"info": "Check that marks sit visually centered and consistent over their bases across the alphabet — best judged in a text tab with a stress-test string across all masters."
+			"title": "Check that diacritics align on their base shapes",
+			"info": "Read accented letters in a text tab across all masters, watching how marks sit over their bases.\n\nAnchors place marks mechanically, but optical centring is a judgement — a mark centred on the bounding box often looks wrong on a diagonal or asymmetric letter."
 		},
 		{
 			"id": "anchor-consistency",
 			"category": "components-diacritics",
 			"type": "build",
 			"checker": "anchor_consistency",
-			"title": "Anchors are consistent",
-			"info": "Checks that base glyphs and marks carry the anchors Glyphs expects (top, bottom, _top…), so composites auto-align and mark features work."
+			"title": "Check that anchors are consistent",
+			"info": "Check that base letters carry the anchors their marks attach to, and that marks carry the matching underscore anchors.\n\nAnchors drive both automatic composite alignment and the mark features. A missing one means a diacritic lands in the wrong place, or the feature silently skips that letter."
 		},
 		{
 			"id": "ligature-carets",
 			"category": "components-diacritics",
 			"type": "build",
 			"checker": "ligature_carets",
-			"title": "Ligature carets are set up",
-			"info": "Ligatures need caret anchors (caret_1, caret_2…) so text editors can place the cursor between the components. The checker verifies every exporting ligature has them."
+			"title": "Set up the ligature carets",
+			"info": "Add caret anchors to every ligature produced by liga, dlig, rlig, clig or hlig — one fewer than the number of parts.\n\nCarets tell text editors where the cursor may fall inside a ligature. Without them, selecting or stepping through a word jumps across the whole ligature at once."
 		},
 		{
 			"id": "metrics-keys-sync",
 			"category": "spacing-kerning",
 			"type": "build",
 			"checker": "metrics_keys_sync",
-			"title": "Metrics keys are in sync",
-			"info": "Reports every layer whose sidebearings no longer match their metrics keys — the ones Glyphs shows in red in the info box."
+			"title": "Bring the metrics keys back in sync",
+			"info": "Check for layers whose sidebearings no longer match their metrics keys — the ones Glyphs shows in red.\n\nAn out-of-sync key means the sidebearing was edited by hand after the key was set, so the relationship the key describes is no longer true and later changes will not propagate."
 		},
 		{
 			"id": "touching",
 			"category": "spacing-kerning",
 			"type": "tool",
-			"title": "No characters are touching",
-			"info": "Touché scans the font for glyph pairs that touch or overlap and lists them in a tab.",
+			"title": "Check that no characters are touching",
+			"info": "Look for glyph pairs whose outlines touch or overlap once kerning is applied.\n\nTouching letters read as a broken font more than any other spacing fault. Touché scans the whole font for collisions and lists the pairs.",
 			"links": [
 				{
 					"label": "Touché",
@@ -460,15 +460,15 @@
 			"id": "brace-bracket-kerning",
 			"category": "spacing-kerning",
 			"type": "manual",
-			"title": "Brace and bracket layers are checked for kerning",
-			"info": "Alternate layers change shapes — kerning that works for the default outlines may collide on brace/bracket layers. Check the affected glyphs at their switch points."
+			"title": "Check kerning against the brace and bracket layers",
+			"info": "Check the glyphs with alternate layers at the points where those layers switch in.\n\nKerning is set on the default outlines, but a bracket layer can change the shape entirely — so a pair that fits in the Regular may collide once the alternate takes over."
 		},
 		{
 			"id": "small-pairs",
 			"category": "spacing-kerning",
 			"type": "tool",
-			"title": "No tiny kerning pairs",
-			"info": "Pairs under roughly 5 units add file size without visible effect — consider deleting them. The mekkablue scripts collection has kerning cleanup scripts for exactly this.",
+			"title": "Remove tiny kerning pairs",
+			"info": "Look through the kerning for pairs below roughly 5 units and consider deleting them.\n\nA correction that small is invisible at text sizes, but it still costs file size and clutters the kerning when it is reviewed later.",
 			"links": [
 				{
 					"label": "mekkablue scripts",
@@ -480,8 +480,8 @@
 			"id": "overkerns",
 			"category": "spacing-kerning",
 			"type": "tool",
-			"title": "No overkerns",
-			"info": "Run 'New Tab with Overkerned Pairs' from the mekkablue scripts collection to list pairs that kern more than a set percentage of the glyph widths.",
+			"title": "Check for overkerns",
+			"info": "Look for pairs kerned by more than a sensible share of the glyph widths.\n\nAn extreme value is usually a typo or a leftover experiment rather than a decision, and it stands out immediately in text. New Tab with Overkerned Pairs collects them in one tab.",
 			"links": [
 				{
 					"label": "mekkablue scripts",
@@ -500,16 +500,16 @@
 			"id": "extension-kerning",
 			"category": "spacing-kerning",
 			"type": "manual",
-			"title": "Consider if extension kerning is relevant",
-			"info": "Consider kerning beyond the core alphabet: punctuation, figures, brackets and other extensions of your kerning classes."
+			"title": "Consider whether extension kerning is needed",
+			"info": "Decide how far the kerning should reach beyond the core alphabet — punctuation, figures, brackets, quotes, and the classes they belong to.\n\nMost spacing faults readers notice sit at these boundaries rather than between two letters. How far to take it depends on what the family is for."
 		},
 		{
 			"id": "ss-named",
 			"category": "features",
 			"type": "build",
 			"checker": "ss_named",
-			"title": "Stylistic sets are named",
-			"info": "Every ssXX feature should carry a human-readable name — apps show it in their stylistic set UI."
+			"title": "Name the stylistic sets",
+			"info": "Give every ssXX feature a readable name in Font Info > Features.\n\nApps show that name in their stylistic set menu. Without one, the menu offers 'ss03' and nobody can tell what it does."
 		},
 		{
 			"id": "ss-coverage",
@@ -517,31 +517,31 @@
 			"type": "build",
 			"checker": "ss_coverage",
 			"reportStyle": true,
-			"title": "Stylistic sets cover diacritics and related glyphs",
-			"info": "Report-style checker: for each glyph with an .ssXX variant, it lists related glyphs (diacritics, composites) that lack the same variant. You judge what is intentional."
+			"title": "Extend the stylistic sets to related glyphs",
+			"info": "Check that composites and diacritics built from a glyph with a stylistic variant have their own variant too.\n\nIf a.ss01 exists but aacute.ss01 does not, turning the feature on changes some letters and leaves the accented ones behind — visible immediately in any language that uses them."
 		},
 		{
 			"id": "smallcaps-coverage",
 			"category": "features",
 			"type": "build",
 			"checker": "smallcaps_coverage",
-			"title": "Small caps cover all uppercase",
-			"info": "If the font has small caps, every uppercase (and relevant lowercase) character should have a small cap counterpart."
+			"title": "Cover all uppercase with small caps",
+			"info": "Check that every uppercase letter has a small cap counterpart.\n\nA missing one falls back to the full capital, which towers over its neighbours in small cap settings and is impossible to miss once noticed."
 		},
 		{
 			"id": "tabular-widths",
 			"category": "features",
 			"type": "build",
 			"checker": "tabular_widths",
-			"title": "All tabular glyphs share the same width",
-			"info": "Every tabular glyph (.tf, .tosf) must have an identical width, checked per master."
+			"title": "Give all tabular glyphs the same width",
+			"info": "Check that every glyph with a tabular suffix shares one width with the others in its group, in every master.\n\nFigures that do not line up in columns defeat the purpose of tabular figures. Groups are compared separately, so .tf and .tf.sc each keep their own width."
 		},
 		{
 			"id": "math-tabular",
 			"category": "features",
 			"type": "tool",
-			"title": "Math symbols are tabular",
-			"info": "Plus, minus, equals, multiply etc. should share the tabular width so they align in columns of figures. Tabular Checker (mekkablue > Spacing) reports every glyph whose width differs from the tabular width.",
+			"title": "Make the math symbols tabular",
+			"info": "Check that plus, minus, equals, multiply, divide and their relatives share the tabular width.\n\nMath symbols sit inside columns of figures, so a symbol of a different width breaks the alignment the tabular figures were made for. Tabular Checker reports every glyph that differs.",
 			"run": {
 				"type": "menu",
 				"match": [
@@ -554,23 +554,23 @@
 			"id": "fractions",
 			"category": "features",
 			"type": "manual",
-			"title": "Fractions use suitable numerator, denominator and slash placement",
-			"info": "Check that numerators, denominators and the fraction slash align and space correctly, both in precomposed fractions and via the frac feature."
+			"title": "Check the fraction numerators, denominators and slash",
+			"info": "Read the precomposed fractions and the frac feature: numerator and denominator alignment, and how the fraction slash spaces against them.\n\nFractions are built from parts that were designed separately, so they need looking at as a whole before they read as one character."
 		},
 		{
 			"id": "feature-code-compiles",
 			"category": "features",
 			"type": "build",
 			"checker": "feature_code_compiles",
-			"title": "Feature code compiles without errors",
-			"info": "Compiles the OpenType features and reports any errors in features, prefixes or classes — hand-written code can break long before you notice it at export."
+			"title": "Compile the feature code without errors",
+			"info": "Compile the OpenType features and read any errors reported in features, prefixes or classes.\n\nHand-written code can break long before anyone notices, and a broken feature usually fails silently — it simply never applies."
 		},
 		{
 			"id": "language-coverage",
 			"category": "final-qa",
 			"type": "tool",
-			"title": "Intended language coverage is actually covered",
-			"info": "Hyperglot checks which languages your character set actually supports — intent and reality often differ.",
+			"title": "Confirm the intended language coverage",
+			"info": "Check which languages the character set actually supports, against the list the project promised.\n\nIntent and reality drift apart easily: one missing accented letter drops a whole language. Hyperglot checks a character set against its language database.",
 			"links": [
 				{
 					"label": "Hyperglot",
@@ -582,29 +582,29 @@
 			"id": "style-linking-apps",
 			"category": "final-qa",
 			"type": "manual",
-			"title": "Style linking works in different apps",
-			"info": "Install a test export and verify the Bold/Italic buttons in Word, the style menus in Adobe apps, and macOS font pickers behave as intended."
+			"title": "Test style linking in real applications",
+			"info": "Install a test export and try the Bold and Italic buttons in Word, the style menus in Adobe apps, and the macOS font pickers.\n\nStyle linking is defined in the file but interpreted by each application, so the only proof that it works is watching it work."
 		},
 		{
 			"id": "smoke-test",
 			"category": "final-qa",
 			"type": "manual",
-			"title": "Real exports are tested in InDesign and a browser",
-			"info": "Actually export OTF/TTF/variable and open them in InDesign and a browser. This catches the class of bugs no source-level check can see."
+			"title": "Test real exports in InDesign and a browser",
+			"info": "Export the OTF, TTF and variable versions and open them in InDesign and a browser before release.\n\nThis catches the class of problems no source-level check can see — compilation faults, feature failures, rendering surprises — while there is still time to fix them."
 		},
 		{
 			"id": "woff-browsers",
 			"category": "final-qa",
 			"type": "manual",
-			"title": "WOFF files are tested in relevant browsers",
-			"info": "Test the webfont exports in the browsers that matter for the project — rendering, line spacing and feature support."
+			"title": "Test the WOFF files in the relevant browsers",
+			"info": "Load the webfont exports in the browsers the project cares about and read real text.\n\nBrowsers differ in how they render, space and apply features, and webfont-specific problems only appear once the file is served as a webfont."
 		},
 		{
 			"id": "fontspector",
 			"category": "final-qa",
 			"type": "tool",
-			"title": "Files pass Fontspector",
-			"info": "Run the compiled binaries through Fontspector for binary-level QA that this plugin cannot see from the source file.",
+			"title": "Run the files through Fontspector",
+			"info": "Check the compiled binaries with Fontspector before release.\n\nIt inspects the exported tables directly, which is the layer this checklist cannot reach: source files can be perfect while the binary still fails a specification check.",
 			"links": [
 				{
 					"label": "Fontspector",
