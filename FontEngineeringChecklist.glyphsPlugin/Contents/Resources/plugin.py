@@ -759,17 +759,59 @@ class FontEngineeringChecklist(GeneralPlugin):
 	@objc.python_method
 	def openAddSheet(self, sender):
 		categoryNames = [c["name"] for c in self.orderedCategories()]
-		self.addSheet = vanilla.Sheet((380, 250), self.w)
+		self.catalog = self.toolCatalog()
+		self.addSheet = vanilla.Sheet((420, 340), self.w)
 		self.addSheet.titleLabel = vanilla.TextBox((MARGIN, 17, 65, 16), "Title", sizeStyle="small")
 		self.addSheet.titleField = vanilla.EditText((85, 14, -MARGIN, 22), "")
 		self.addSheet.catLabel = vanilla.TextBox((MARGIN, 49, 65, 16), "Category", sizeStyle="small")
 		self.addSheet.catPopup = vanilla.PopUpButton((85, 46, -MARGIN, 22), categoryNames)
 		self.addSheet.infoLabel = vanilla.TextBox((MARGIN, 81, 65, 16), "Info", sizeStyle="small")
-		self.addSheet.infoField = vanilla.TextEditor((85, 78, -MARGIN, -50), "")
+		self.addSheet.infoField = vanilla.TextEditor((85, 78, -MARGIN, -116), "")
+		self.addSheet.linkLabel = vanilla.TextBox((MARGIN, -107, 65, 16), "Link", sizeStyle="small")
+		self.addSheet.linkField = vanilla.EditText(
+			(85, -110, -MARGIN, 22), "", placeholder="Optional web page, e.g. a tutorial")
+		self.addSheet.toolLabel = vanilla.TextBox((MARGIN, -73, 65, 16), "Tool", sizeStyle="small")
+		self.addSheet.toolCombo = vanilla.ComboBox(
+			(85, -76, -MARGIN, 22), sorted(self.catalog), completes=True)
+		self.addSheet.toolHint = vanilla.TextBox(
+			(85, -50, -MARGIN, 14),
+			"Start typing to find one of your %i installed scripts and plugins." % len(self.catalog),
+			sizeStyle="small",
+		)
 		self.addSheet.cancelButton = vanilla.Button((-185, -35, 80, 20), "Cancel", callback=self.addSheetCancel)
 		self.addSheet.addButton = vanilla.Button((-95, -35, 80, 20), "Add", callback=self.addSheetAdd)
 		self.addSheet.setDefaultButton(self.addSheet.addButton)
 		self.addSheet.open()
+
+	@objc.python_method
+	def toolCatalog(self):
+		"""Every reporter, script and filter installed right now, keyed by the
+		name shown in the menus."""
+		catalog = {}
+		for reporter in Glyphs.reporters:
+			try:
+				title = str(reporter.title())
+			except Exception:
+				continue
+			if title:
+				catalog[title] = {"type": "reporter", "match": [title], "label": title}
+
+		def collect(menu, depth=0):
+			for item in menu.itemArray():
+				if item.hasSubmenu():
+					collect(item.submenu(), depth + 1)
+				elif item.action() and not item.isSeparatorItem():
+					title = str(item.title()).strip()
+					# Skip one-word system entries; scripts have real names.
+					if len(title) > 3 and title not in catalog:
+						catalog[title] = {"type": "menu", "match": [title], "label": title}
+
+		mainMenu = NSApp.mainMenu()
+		wanted = ("script", "filter")
+		for item in mainMenu.itemArray():
+			if item.hasSubmenu() and str(item.title()).strip().lower() in wanted:
+				collect(item.submenu())
+		return catalog
 
 	@objc.python_method
 	def addSheetCancel(self, sender):
@@ -783,13 +825,31 @@ class FontEngineeringChecklist(GeneralPlugin):
 			return
 		category = self.orderedCategories()[self.addSheet.catPopup.get()]["id"]
 		info = self.addSheet.infoField.get().strip()
-		custom = self.plainCustomChecks()
-		custom.append({
+		entry = {
 			"id": "custom-%s" % uuid.uuid4().hex[:12],
 			"title": title,
 			"category": category,
 			"info": info,
-		})
+		}
+
+		url = self.addSheet.linkField.get().strip()
+		if url:
+			if "://" not in url:
+				url = "https://" + url
+			label = url.split("://", 1)[1].split("/")[0] or "Open link"
+			entry["links"] = [{"label": label, "url": url}]
+
+		toolName = self.addSheet.toolCombo.get().strip()
+		if toolName:
+			run = getattr(self, "catalog", {}).get(toolName)
+			if run is None:
+				# Typed by hand: match on the text and let the popover decide
+				# whether it's actually installed.
+				run = {"type": "menu", "match": [toolName], "label": toolName}
+			entry["run"] = run
+
+		custom = self.plainCustomChecks()
+		custom.append(entry)
 		Glyphs.defaults[CUSTOM_KEY] = custom
 		self.addSheet.close()
 		self.rebuildList()
@@ -825,29 +885,43 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def getCustomChecks(self):
-		value = Glyphs.defaults[CUSTOM_KEY]
+		value = self.plainCopy(Glyphs.defaults[CUSTOM_KEY])
 		result = []
 		if value:
 			for item in value:
+				if not isinstance(item, dict):
+					continue
 				try:
-					result.append({
+					check = {
 						"id": str(item["id"]),
 						"title": str(item["title"]),
 						"category": str(item["category"]),
-						"info": str(item["info"]) if "info" in item and item["info"] else "",
+						"info": str(item.get("info") or ""),
 						"type": "manual",
 						"custom": True,
-					})
+					}
 				except (KeyError, TypeError):
 					continue
+				if item.get("links"):
+					check["links"] = item["links"]
+				if item.get("run"):
+					check["run"] = item["run"]
+				result.append(check)
 		return result
 
 	@objc.python_method
 	def plainCustomChecks(self):
-		return [
-			{"id": c["id"], "title": c["title"], "category": c["category"], "info": c["info"]}
-			for c in self.getCustomChecks()
-		]
+		checks = []
+		for check in self.getCustomChecks():
+			plain = {
+				"id": check["id"], "title": check["title"],
+				"category": check["category"], "info": check["info"],
+			}
+			for key in ("links", "run"):
+				if check.get(key):
+					plain[key] = check[key]
+			checks.append(plain)
+		return checks
 
 	@objc.python_method
 	def getHidden(self):

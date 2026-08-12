@@ -13,9 +13,9 @@
 	<key>CFBundleName</key>
 	<string>Font Engineering Checklist</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.8.3</string>
+	<string>0.9.0</string>
 	<key>CFBundleVersion</key>
-	<string>29</string>
+	<string>30</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright, Michal Chrastina &amp; Kasper Pyndt, 2026</string>
 	<key>NSPrincipalClass</key>
