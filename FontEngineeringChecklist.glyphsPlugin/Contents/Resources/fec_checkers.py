@@ -119,7 +119,10 @@ def font_info_complete(font):
 
 @checker("ps_name_length")
 def ps_name_length(font):
-	over = []
+	# 31 characters is the legacy limit this checklist holds names to; 63 is
+	# the hard maximum in the specification.
+	overHard = []
+	overLegacy = []
 	for instance in staticInstances(font):
 		try:
 			psName = instance.fontName
@@ -128,11 +131,19 @@ def ps_name_length(font):
 				(font.familyName or "").replace(" ", ""),
 				(instance.name or "").replace(" ", ""),
 			)
+		entry = "%s (%i characters)" % (psName, len(psName))
 		if len(psName) > 63:
-			over.append("%s (%i characters)" % (psName, len(psName)))
-	if over:
-		return False, "PostScript names over the 63-character limit:\n" + bulletList(over), []
-	return True, "All PostScript names stay within 63 characters.", []
+			overHard.append(entry)
+		elif len(psName) > 31:
+			overLegacy.append(entry)
+	if overHard or overLegacy:
+		parts = []
+		if overHard:
+			parts.append("Over the 63-character maximum:\n" + bulletList(overHard))
+		if overLegacy:
+			parts.append("Over the 31-character legacy limit:\n" + bulletList(overLegacy))
+		return False, "\n\n".join(parts), []
+	return True, "All PostScript names stay within 31 characters.", []
 
 
 @checker("weight_width_classes")
@@ -349,24 +360,6 @@ def uc_diacritics_clipping(font):
 	if offending:
 		return False, "Glyphs cross the clipping boundary:\n" + bulletList(details), offending
 	return True, "Nothing crosses the clipping boundary in any master.", []
-
-
-@checker("vm_across_masters")
-def vm_across_masters(font):
-	if len(font.masters) < 2:
-		return True, "Only one master — nothing to compare.", []
-	problems = []
-	for key in VERTICAL_KEYS:
-		values = {}
-		for master in font.masters:
-			value = master.customParameters[key]
-			values.setdefault(str(value), []).append(master.name)
-		if len(values) > 1:
-			problems.append("%s: %s" % (key, "; ".join(
-				"%s (%s)" % (value, ", ".join(names)) for value, names in values.items())))
-	if problems:
-		return False, "Vertical metrics differ between masters:\n" + bulletList(problems), []
-	return True, "All masters share identical vertical metrics parameters.", []
 
 
 @checker("linespacing_across_styles")

@@ -36,7 +36,7 @@
 			"category": "font-setup",
 			"type": "manual",
 			"title": "Set up naming and PostScript names",
-			"info": "Fill in the family name, style names and PostScript names in Font Info. Style names use title case (Bold Italic, not bold-italic), and PostScript names have no spaces or special characters.\n\nFamily plus style should stay under 63 characters. The Glyphs naming tutorial covers the rules for each type of name.",
+			"info": "Fill in the family name, style names and PostScript names in Font Info. Style names use title case (Bold Italic, not bold-italic), and PostScript names have no spaces or special characters.\n\nThe Glyphs naming tutorial covers the rules for each type of name. Name length has its own check below.",
 			"links": [
 				{
 					"label": "Glyphs naming tutorial",
@@ -95,8 +95,8 @@
 			"category": "font-setup",
 			"type": "build",
 			"checker": "ps_name_length",
-			"title": "Keep PostScript names within the length limits",
-			"info": "Check that the PostScript name of every exporting instance is 63 characters or fewer.\n\nLonger names break in older applications and some PDF workflows. Under 31 characters is safer if the family has to work in legacy software."
+			"title": "Keep PostScript names within the legacy length limit",
+			"info": "Check that the PostScript name of every exporting instance is 31 characters or fewer.\n\n31 is the limit from older Mac environments and Type 1, and staying inside it keeps the family working in legacy software. The specification allows up to 63, which is the point where names break outright."
 		},
 		{
 			"id": "weight-width-classes",
@@ -184,20 +184,12 @@
 			"info": "Check that the tallest glyphs, usually uppercase diacritics, stay inside the win metrics in every master.\n\nWindows applications cut off anything above winAscent or below winDescent. Accented capitals are the first to go."
 		},
 		{
-			"id": "vm-across-masters",
-			"category": "vertical-metrics",
-			"type": "build",
-			"checker": "vm_across_masters",
-			"title": "Keep vertical metrics identical across masters",
-			"info": "Check that every master has the same vertical metric values.\n\nMetrics that differ between masters change the line spacing when the weight changes, and produce inconsistent interpolated instances."
-		},
-		{
 			"id": "linespacing-across-styles",
 			"category": "vertical-metrics",
 			"type": "build",
 			"checker": "linespacing_across_styles",
-			"title": "Keep line spacing consistent across the family",
-			"info": "Compare the vertical metrics of every style: masters, instance overrides, and the other files of the family if they are open.\n\nSetting text in Regular and switching it to Italic should not change the leading. Roman and italic kept in separate files are the usual source of a mismatch."
+			"title": "Keep vertical metrics consistent across the family",
+			"info": "Compare the vertical metrics of every style: all masters, any instance overrides, and the other files of the family if they are open.\n\nSetting text in Regular and switching it to Italic should not change the leading. Metrics that differ between masters also produce inconsistent interpolated instances. Roman and italic kept in separate files are the usual source of a mismatch."
 		},
 		{
 			"id": "alignment-zones",
@@ -541,7 +533,7 @@
 			"category": "features",
 			"type": "tool",
 			"title": "Make the math symbols tabular",
-			"info": "Check that plus, minus, equals, multiply, divide and the rest share the tabular width.\n\nMath symbols sit in columns of figures, so a symbol of a different width breaks the alignment. Tabular Checker reports the ones that differ.",
+			"info": "Check that plus, minus, equals, multiply, divide and the rest have the same width as the tabular figures. This is about the default math symbols, the ones without a tabular suffix.\n\nMath symbols set in columns of figures have to hold the same column. Symbols that do carry a tabular suffix are covered by the tabular widths check instead. Tabular Checker reports the glyphs whose width differs.",
 			"run": {
 				"type": "menu",
 				"match": [
@@ -589,8 +581,8 @@
 			"id": "smoke-test",
 			"category": "final-qa",
 			"type": "manual",
-			"title": "Test real exports in InDesign and a browser",
-			"info": "Export the OTF, TTF and variable versions and open them in InDesign and a browser before release.\n\nThis catches problems no source-level check can see: compilation faults, features that do not apply, rendering surprises."
+			"title": "Test real exports in InDesign",
+			"info": "Export the OTF, TTF and variable versions and open them in InDesign before release.\n\nThis catches problems no source-level check can see: compilation faults, features that do not apply, rendering surprises. Webfonts have their own check."
 		},
 		{
 			"id": "woff-browsers",
