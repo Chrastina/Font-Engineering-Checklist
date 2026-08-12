@@ -47,7 +47,7 @@
 		{
 			"id": "style-linking-setup",
 			"category": "font-setup",
-			"type": "manual",
+			"type": "build",
 			"title": "Set up style linking",
 			"info": "In Font Info > Exports, Bold, Italic and Bold Italic styles should be style-linked to their base style. Other styles stay unlinked unless you have a reason. Whether linking behaves in real apps is a separate check under Final QA.",
 			"links": [
@@ -55,28 +55,32 @@
 					"label": "Glyphs naming tutorial (style linking section)",
 					"url": "https://glyphsapp.com/learn/naming"
 				}
-			]
+			],
+			"checker": "style_linking"
 		},
 		{
 			"id": "master-locations",
 			"category": "font-setup",
-			"type": "manual",
+			"type": "build",
 			"title": "Master locations are correctly defined in the designspace",
-			"info": "Check Font Info > Masters: each master's axis coordinates should sit where you intend them, and all instances should fall inside the range the masters span."
+			"info": "Check Font Info > Masters: each master's axis coordinates should sit where you intend them, and all instances should fall inside the range the masters span.",
+			"checker": "master_locations"
 		},
 		{
 			"id": "default-master",
 			"category": "font-setup",
-			"type": "manual",
+			"type": "build",
 			"title": "Default master matches the intended style",
-			"info": "The default (origin) of a variable font is what apps show before any axis is touched. Make sure it is the style you want as the default, e.g. via the Variable Font Origin custom parameter."
+			"info": "The default (origin) of a variable font is what apps show before any axis is touched. Make sure it is the style you want as the default, e.g. via the Variable Font Origin custom parameter.",
+			"checker": "default_master"
 		},
 		{
 			"id": "use-typo-metrics",
 			"category": "font-setup",
-			"type": "manual",
+			"type": "build",
 			"title": "Add 'Use Typo Metrics'",
-			"info": "Add the Use Typo Metrics custom parameter in Font Info > Font (fsSelection bit 7). Apps then use typo metrics instead of win metrics for line spacing — recommended, and required by Google Fonts."
+			"info": "Add the Use Typo Metrics custom parameter in Font Info > Font (fsSelection bit 7). Apps then use typo metrics instead of win metrics for line spacing — recommended, and required by Google Fonts.",
+			"checker": "use_typo_metrics"
 		},
 		{
 			"id": "font-info-complete",
@@ -127,16 +131,42 @@
 		{
 			"id": "copyright",
 			"category": "font-setup",
-			"type": "manual",
+			"type": "build",
 			"title": "Copyright years and ownership are correct",
-			"info": "Check the copyright string in Font Info: right years, right owner, consistent with the license text."
+			"info": "Check the copyright string in Font Info: right years, right owner, consistent with the license text.",
+			"checker": "copyright_years"
 		},
 		{
 			"id": "panose",
 			"category": "font-setup",
-			"type": "manual",
+			"type": "build",
 			"title": "PANOSE values are intentional or safely neutral",
-			"info": "Unset PANOSE defaults to all zeros ('any'), which is safe. If you set values, make sure the classification is deliberate, not leftover from another project."
+			"info": "Unset PANOSE defaults to all zeros ('any'), which is safe. If you set values, make sure the classification is deliberate, not leftover from another project.",
+			"checker": "panose"
+		},
+		{
+			"id": "glyph-names-legal",
+			"category": "font-setup",
+			"type": "build",
+			"checker": "glyph_names_legal",
+			"title": "Glyph names are legal",
+			"info": "Exporting glyph names must start with a letter or underscore, contain only letters, digits, dots and underscores, and stay at or under 63 characters. Illegal names break compilation or get silently renamed."
+		},
+		{
+			"id": "missing-unicodes",
+			"category": "font-setup",
+			"type": "build",
+			"checker": "missing_unicodes",
+			"title": "Glyphs have their expected Unicode values",
+			"info": "Compares each exporting glyph against the Unicode value Glyphs expects for that name. A missing codepoint means the character can't be typed or copied from the font."
+		},
+		{
+			"id": "duplicate-unicodes",
+			"category": "font-setup",
+			"type": "build",
+			"checker": "duplicate_unicodes",
+			"title": "No duplicate Unicode values",
+			"info": "Two glyphs claiming the same codepoint silently break the cmap table — only one of them ends up reachable."
 		},
 		{
 			"id": "gf-vertical-metrics",
@@ -182,9 +212,10 @@
 		{
 			"id": "alignment-zones",
 			"category": "drawing",
-			"type": "manual",
+			"type": "build",
 			"title": "Shapes correspond to alignment zones",
-			"info": "Overshoots of round shapes should land inside the zones defined in Font Info > Masters, flats on the flat edge. Zones that don't catch your shapes are worse than no zones."
+			"info": "Overshoots of round shapes should land inside the zones defined in Font Info > Masters, flats on the flat edge. Zones that don't catch your shapes are worse than no zones.",
+			"checker": "alignment_zones"
 		},
 		{
 			"id": "stems",
@@ -323,14 +354,15 @@
 		{
 			"id": "space-width",
 			"category": "drawing",
-			"type": "manual",
+			"type": "build",
 			"title": "Space has an appropriate width",
-			"info": "Test the space in running text at several weights — it should hold words apart without opening holes. Don't forget the no-break space matches it."
+			"info": "Test the space in running text at several weights — it should hold words apart without opening holes. Don't forget the no-break space matches it.",
+			"checker": "space_width"
 		},
 		{
 			"id": "space-glyphs",
 			"category": "drawing",
-			"type": "manual",
+			"type": "build",
 			"title": "Relevant space characters are added",
 			"info": "Figure space, thin space, hair space, no-break space etc. The Build Space Glyphs script from the mekkablue collection adds them with correct, metrics-keyed widths.",
 			"links": [
@@ -345,7 +377,24 @@
 					"Build Space Glyphs"
 				],
 				"label": "Build Space Glyphs"
-			}
+			},
+			"checker": "space_glyphs"
+		},
+		{
+			"id": "empty-glyphs",
+			"category": "drawing",
+			"type": "build",
+			"checker": "empty_glyphs",
+			"title": "No empty exporting glyphs",
+			"info": "Finds glyphs set to export that have no paths, no components and no width. Almost always an accident — either draw them, give them a width, or switch off export."
+		},
+		{
+			"id": "brace-layers-designspace",
+			"category": "drawing",
+			"type": "build",
+			"checker": "brace_layers_in_designspace",
+			"title": "Brace layers sit inside the designspace",
+			"info": "A brace layer whose coordinates fall outside the range the masters span never activates — it silently does nothing at export."
 		},
 		{
 			"id": "nested-flipped-components",
@@ -389,6 +438,14 @@
 			"checker": "ligature_carets",
 			"title": "Ligature carets are set up",
 			"info": "Ligatures need caret anchors (caret_1, caret_2…) so text editors can place the cursor between the components. The checker verifies every exporting ligature has them."
+		},
+		{
+			"id": "components-nonexporting",
+			"category": "components-diacritics",
+			"type": "build",
+			"checker": "components_nonexporting",
+			"title": "Components do not reference non-exporting glyphs",
+			"info": "Composites built from glyphs that don't export still work (Glyphs decomposes them), but it usually signals a mistake in how the glyph was built. Underscore glyphs like _part.something are exempt."
 		},
 		{
 			"id": "metrics-keys-sync",
@@ -512,6 +569,14 @@
 			"type": "manual",
 			"title": "Fractions use suitable numerator, denominator and slash placement",
 			"info": "Check that numerators, denominators and the fraction slash align and space correctly, both in precomposed fractions and via the frac feature."
+		},
+		{
+			"id": "feature-code-compiles",
+			"category": "features",
+			"type": "build",
+			"checker": "feature_code_compiles",
+			"title": "Feature code compiles without errors",
+			"info": "Compiles the OpenType features and reports any errors in features, prefixes or classes — hand-written code can break long before you notice it at export."
 		},
 		{
 			"id": "language-coverage",

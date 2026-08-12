@@ -563,16 +563,18 @@ class FontEngineeringChecklist(GeneralPlugin):
 		checkerAvailable = bool(checkerName) and fec_checkers.has(checkerName)
 		actionCount = (1 if runAvailable else 0) + (1 if checkerAvailable else 0)
 
+		# Equal air above and below the body text.
+		titleTop, titleHeight, gap = 8, 17, 13
 		width = 320
 		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
-		bodyTop = 38
-		height = 10 + bodyTop - 10 + textHeight + actionCount * 24 + len(links) * 24 + 10
+		bodyTop = titleTop + titleHeight + gap
+		y = bodyTop + textHeight + gap
+		height = y + actionCount * 24 + len(links) * 24 + (10 - 6 if (actionCount or links) else 0)
 
 		self.popover = vanilla.Popover((width, height), behavior="transient")
 		self.popoverCheckId = checkId
-		self.popover.title = vanilla.TextBox((10, 8, -10, 17), title)
+		self.popover.title = vanilla.TextBox((10, titleTop, -10, titleHeight), title)
 		self.popover.text = vanilla.TextBox((10, bodyTop, -10, textHeight), info, sizeStyle="small")
-		y = bodyTop + textHeight + 4
 		if checkerAvailable:
 			self.popover.checkButton = vanilla.Button(
 				(10, y, -10, 18), "Run Check", sizeStyle="small",

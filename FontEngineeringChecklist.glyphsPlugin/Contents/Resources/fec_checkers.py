@@ -540,6 +540,389 @@ def ss_coverage(font):
 	return True, "Stylistic sets cover all related composites.", []
 
 
+@checker("use_typo_metrics")
+def use_typo_metrics(font):
+	value = font.customParameters["Use Typo Metrics"]
+	if value is None:
+		value = font.customParameters["useTypoMetrics"]
+	if not value:
+		return False, "The 'Use Typo Metrics' parameter isn't set. Add it in Font Info > Font so apps use the typo metrics for line spacing.", []
+	missing = []
+	for master in font.masters:
+		for key in ("typoAscender", "typoDescender"):
+			if master.customParameters[key] is None:
+				missing.append("%s: %s" % (master.name, key))
+	if missing:
+		return False, (
+			"'Use Typo Metrics' is set, but the typo metrics apps will now rely on are empty:\n"
+			+ bulletList(missing)
+		), []
+	return True, "'Use Typo Metrics' is set and the typo metrics are defined.", []
+
+
+@checker("style_linking")
+def style_linking(font):
+	instances = staticInstances(font)
+	byName = dict((str(instance.name or ""), instance) for instance in instances)
+	problems = []
+	linkedAny = False
+	for instance in instances:
+		name = str(instance.name or "")
+		compact = name.lower().replace(" ", "")
+		isBold = "bold" in compact and "semibold" not in compact and "extrabold" not in compact and "ultrabold" not in compact
+		isItalic = bool(getattr(instance, "isItalic", False)) or "italic" in compact or "oblique" in compact
+		if not (isBold or isItalic):
+			continue
+		linkName = str(getattr(instance, "linkStyle", "") or "")
+		if not linkName:
+			problems.append("%s: no linked style set (Font Info > Exports > Style Linking)" % name)
+			continue
+		linkedAny = True
+		if linkName not in byName:
+			problems.append("%s: linked to '%s', which is not an exporting instance" % (name, linkName))
+	if problems:
+		return False, "Style linking problems:\n" + bulletList(problems), []
+	if not linkedAny:
+		return True, "No bold or italic instances that need style linking.", []
+	return True, "Bold and italic instances are linked to existing base styles.", []
+
+
+@checker("master_locations")
+def master_locations(font):
+	if not font.masters:
+		return False, "The font has no masters.", []
+	problems = []
+	seen = {}
+	for master in font.masters:
+		try:
+			coordinates = tuple(round(float(value), 3) for value in master.axes)
+		except (AttributeError, TypeError):
+			continue
+		if coordinates in seen:
+			problems.append("%s and %s sit at the same location %s" % (seen[coordinates], master.name, list(coordinates)))
+		seen[coordinates] = master.name
+	axisCount = len(font.axes) if font.axes else 0
+	for index in range(axisCount):
+		values = set()
+		for master in font.masters:
+			try:
+				values.add(round(float(master.axes[index]), 3))
+			except (AttributeError, IndexError, TypeError):
+				pass
+		if len(values) < 2:
+			problems.append("axis '%s' has masters at only one location — it cannot interpolate" % font.axes[index].name)
+			continue
+		low, high = min(values), max(values)
+		for instance in staticInstances(font):
+			try:
+				position = round(float(instance.axes[index]), 3)
+			except (AttributeError, IndexError, TypeError):
+				continue
+			if position < low or position > high:
+				problems.append("instance '%s' at %g is outside the masters' %s range (%g–%g)" % (
+					instance.name, position, font.axes[index].name, low, high))
+	if problems:
+		return False, "Designspace problems:\n" + bulletList(problems), []
+	return True, "Masters sit at distinct locations and every instance falls inside the designspace.", []
+
+
+@checker("default_master")
+def default_master(font):
+	origin = font.customParameters["Variable Font Origin"]
+	if origin:
+		for master in font.masters:
+			if master.id == origin or master.name == str(origin):
+				return True, "Variable Font Origin is '%s' — confirm this is the intended default." % master.name, []
+		return False, "Variable Font Origin points at '%s', which is not one of the masters." % origin, []
+	first = font.masters[0]
+	return True, (
+		"No Variable Font Origin parameter, so the default is the first master: '%s'.\n"
+		"Confirm that is the style apps should show before any axis is touched."
+		% first.name
+	), []
+
+
+@checker("copyright_years")
+def copyright_years(font):
+	text = (font.copyright or "").strip()
+	if not text:
+		return False, "The copyright field is empty.", []
+	years = re.findall(r"(19|20)\d{2}", text)
+	if not years:
+		return False, "The copyright string carries no year:\n%s" % text, []
+	fullYears = [int(match.group()) for match in re.finditer(r"(?:19|20)\d{2}", text)]
+	newest = max(fullYears)
+	try:
+		fileYear = font.date.year()
+	except Exception:
+		fileYear = None
+	if fileYear and newest < int(fileYear):
+		return False, (
+			"The newest copyright year is %i but the file was last touched in %i — update the years if the work continued:\n%s"
+			% (newest, int(fileYear), text)
+		), []
+	return True, "Copyright reads:\n%s\n\nConfirm the owner is correct." % text, []
+
+
+@checker("panose")
+def panose(font):
+	value = font.customParameters["panose"]
+	if value is None:
+		value = font.customParameters["openTypeOS2Panose"]
+	if not value:
+		return True, "No PANOSE set — it defaults to all zeros ('any'), which is the safe neutral.", []
+	try:
+		numbers = [int(item) for item in list(value)]
+	except (TypeError, ValueError):
+		return False, "PANOSE is set to something unreadable: %r" % (value,), []
+	if not any(numbers):
+		return True, "PANOSE is all zeros ('any') — safely neutral.", []
+	return True, "PANOSE is set to %s — confirm the classification is deliberate." % numbers, []
+
+
+SPACE_GLYPHS = (
+	"nbspace", "figurespace", "thinspace", "hairspace",
+	"emspace", "enspace", "punctuationspace", "zerowidthspace",
+)
+
+
+@checker("space_glyphs")
+def space_glyphs(font):
+	missing = [name for name in SPACE_GLYPHS if font.glyphs[name] is None]
+	if missing:
+		return False, (
+			"Space characters not in the font:\n%s\n\n"
+			"Build Space Glyphs (mekkablue scripts) adds them with correct, metrics-keyed widths."
+			% bulletList(missing)
+		), []
+	return True, "All the usual space characters are present.", []
+
+
+@checker("space_width")
+def space_width(font):
+	space = font.glyphs["space"]
+	if space is None:
+		return False, "There is no space glyph.", []
+	problems = []
+	offending = []
+	nbspace = font.glyphs["nbspace"]
+	for master in font.masters:
+		layer = space.layers[master.id]
+		if layer is None:
+			continue
+		if layer.width <= 0:
+			problems.append("%s: space has zero width" % master.name)
+			offending.append(layer)
+			continue
+		if nbspace is not None:
+			nbLayer = nbspace.layers[master.id]
+			if nbLayer is not None and round(nbLayer.width, 2) != round(layer.width, 2):
+				problems.append("%s: nbspace is %g but space is %g" % (master.name, nbLayer.width, layer.width))
+				offending.append(nbLayer)
+	if problems:
+		return False, "Space width problems:\n" + bulletList(problems), offending
+	return True, "Space has a real width in every master and nbspace matches it. Judge the actual width in running text yourself.", []
+
+
+@checker("alignment_zones")
+def alignment_zones(font):
+	tolerance = 8
+	details = []
+	offending = []
+	checkedAny = False
+	for master in font.masters:
+		zones = [zone for zone in master.alignmentZones]
+		if not zones:
+			continue
+		checkedAny = True
+		edges = []
+		for zone in zones:
+			position, size = float(zone.position), float(zone.size)
+			edges.append((min(position, position + size), max(position, position + size)))
+		for glyph in font.glyphs:
+			if not glyph.export or glyph.category not in ("Letter", "Number"):
+				continue
+			layer = glyph.layers[master.id]
+			if layer is None or not layer.paths:
+				continue
+			bounds = layer.bounds
+			if bounds.size.height == 0:
+				continue
+			for edgeName, value in (("top", bounds.origin.y + bounds.size.height), ("bottom", bounds.origin.y)):
+				inside = any(low <= value <= high for low, high in edges)
+				if inside:
+					continue
+				near = [(low, high) for low, high in edges if min(abs(value - low), abs(value - high)) <= tolerance]
+				if near:
+					low, high = near[0]
+					details.append("%s (%s): %s at %g, just outside zone %g–%g" % (
+						glyph.name, master.name, edgeName, value, low, high))
+					offending.append(layer)
+	if not checkedAny:
+		return True, "No alignment zones defined — nothing to compare against.", []
+	if details:
+		return False, (
+			"Report — extremes sitting within %i units of a zone but not inside it:\n%s\n\n"
+			"Some of these are intentional; judge each one." % (tolerance, bulletList(details))
+		), offending
+	return True, "No near-miss extremes: shapes either sit inside their zones or clearly away from them.", []
+
+
+@checker("empty_glyphs")
+def empty_glyphs(font):
+	offending = []
+	names = []
+	for glyph in font.glyphs:
+		if not glyph.export or glyph.category == "Separator":
+			continue
+		for layer in glyph.layers:
+			if not layer.isMasterLayer:
+				continue
+			if not layer.paths and not layer.components and layer.width == 0:
+				offending.append(layer)
+				names.append("%s (%s)" % (glyph.name, layer.name))
+	if offending:
+		return False, "Exporting glyphs that are completely empty:\n" + bulletList(names), offending
+	return True, "No empty exporting glyphs.", []
+
+
+@checker("missing_unicodes")
+def missing_unicodes(font):
+	missing = []
+	layers = []
+	masterId = font.masters[0].id
+	for glyph in font.glyphs:
+		if not glyph.export or glyph.unicode:
+			continue
+		info = glyph.glyphInfo
+		expected = getattr(info, "unicode", None) if info else None
+		if expected:
+			missing.append("%s (expected U+%s)" % (glyph.name, expected))
+			layer = glyph.layers[masterId]
+			if layer is not None:
+				layers.append(layer)
+	if missing:
+		return False, "Exporting glyphs without their expected Unicode value:\n" + bulletList(missing), layers
+	return True, "Every exporting glyph that should have a Unicode value has one.", []
+
+
+@checker("duplicate_unicodes")
+def duplicate_unicodes(font):
+	seen = {}
+	for glyph in font.glyphs:
+		if not glyph.export or not glyph.unicode:
+			continue
+		seen.setdefault(str(glyph.unicode), []).append(glyph.name)
+	clashes = ["U+%s: %s" % (code, ", ".join(names)) for code, names in sorted(seen.items()) if len(names) > 1]
+	if clashes:
+		return False, "Several glyphs claim the same Unicode value:\n" + bulletList(clashes), []
+	return True, "No duplicate Unicode values.", []
+
+
+@checker("components_nonexporting")
+def components_nonexporting(font):
+	offending = []
+	details = []
+	for glyph in font.glyphs:
+		if not glyph.export:
+			continue
+		for layer in glyph.layers:
+			if not layer.isMasterLayer:
+				continue
+			for component in layer.components:
+				base = font.glyphs[component.componentName]
+				if base is not None and not base.export and not str(base.name).startswith("_"):
+					offending.append(layer)
+					details.append("%s (%s) uses non-exporting '%s'" % (glyph.name, layer.name, base.name))
+	if offending:
+		return False, (
+			"Components pointing at non-exporting glyphs:\n%s\n\n"
+			"These export fine (Glyphs decomposes them), but it often signals a mistake."
+			% bulletList(details)
+		), offending
+	return True, "No components reference non-exporting glyphs.", []
+
+
+@checker("feature_code_compiles")
+def feature_code_compiles(font):
+	try:
+		font.compileFeatures()
+	except Exception as error:
+		return False, "Feature compilation failed:\n%s" % error, []
+	problems = []
+	for collection, label in ((font.features, "feature"), (font.featurePrefixes, "prefix"), (font.classes, "class")):
+		for item in collection:
+			try:
+				error = item.error
+			except AttributeError:
+				error = None
+			if error:
+				problems.append("%s %s: %s" % (label, item.name, str(error).strip()))
+	if problems:
+		return False, "Feature code has errors:\n" + bulletList(problems), []
+	return True, "All feature code, prefixes and classes compile without errors.", []
+
+
+@checker("glyph_names_legal")
+def glyph_names_legal(font):
+	problems = []
+	pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9._]*$")
+	for glyph in font.glyphs:
+		if not glyph.export:
+			continue
+		name = str(glyph.name)
+		if len(name) > 63:
+			problems.append("%s (%i characters, limit 63)" % (name, len(name)))
+		elif not pattern.match(name):
+			problems.append("%s (illegal characters, or starts with a digit)" % name)
+	if problems:
+		return False, "Glyph names that break the specification:\n" + bulletList(problems), []
+	return True, "All exporting glyph names are legal.", []
+
+
+@checker("brace_layers_in_designspace")
+def brace_layers_in_designspace(font):
+	if not font.axes:
+		return True, "The font has no axes — nothing to validate.", []
+	ranges = []
+	for index in range(len(font.axes)):
+		values = []
+		for master in font.masters:
+			try:
+				values.append(float(master.axes[index]))
+			except (AttributeError, IndexError, TypeError):
+				pass
+		ranges.append((min(values), max(values)) if values else (None, None))
+	problems = []
+	offending = []
+	for glyph in font.glyphs:
+		for layer in glyph.layers:
+			if not layer.isSpecialLayer or not layer.attributes:
+				continue
+			coordinates = layer.attributes.get("coordinates")
+			if not coordinates:
+				continue
+			try:
+				values = [float(value) for value in list(coordinates.values())]
+			except (AttributeError, TypeError, ValueError):
+				continue
+			for index, value in enumerate(values):
+				if index >= len(ranges):
+					continue
+				low, high = ranges[index]
+				if low is None:
+					continue
+				if value < low or value > high:
+					problems.append("%s (%s): %s at %g is outside %g–%g" % (
+						glyph.name, layer.name, font.axes[index].name, value, low, high))
+					offending.append(layer)
+	if problems:
+		return False, (
+			"Brace layers outside the designspace (they silently do nothing):\n" + bulletList(problems)
+		), offending
+	return True, "All brace layer coordinates sit inside the designspace.", []
+
+
 SC_SUFFIXES = (".sc", ".smcp", ".c2sc")
 
 
