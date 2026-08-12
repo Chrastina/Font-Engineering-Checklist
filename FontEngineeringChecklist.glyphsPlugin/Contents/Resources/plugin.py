@@ -563,13 +563,20 @@ class FontEngineeringChecklist(GeneralPlugin):
 		checkerAvailable = bool(checkerName) and fec_checkers.has(checkerName)
 		actionCount = (1 if runAvailable else 0) + (1 if checkerAvailable else 0)
 
-		# Equal air above and below the body text.
+		# Equal air above and below the body text; when nothing follows the
+		# text, the bottom padding matches the side margins instead.
+		side = 10
 		titleTop, titleHeight, gap = 8, 17, 13
 		width = 320
 		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
 		bodyTop = titleTop + titleHeight + gap
-		y = bodyTop + textHeight + gap
-		height = y + actionCount * 24 + len(links) * 24 + (10 - 6 if (actionCount or links) else 0)
+		buttonCount = actionCount + len(links)
+		if buttonCount:
+			y = bodyTop + textHeight + gap
+			height = y + buttonCount * 24 - 6 + side
+		else:
+			y = bodyTop + textHeight
+			height = y + side
 
 		self.popover = vanilla.Popover((width, height), behavior="transient")
 		self.popoverCheckId = checkId
