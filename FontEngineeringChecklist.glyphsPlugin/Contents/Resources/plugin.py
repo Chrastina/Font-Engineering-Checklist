@@ -614,7 +614,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		try:
 			passed, summary, layers = fec_checkers.run(check["checker"], font)
 		except Exception as error:
-			Message(title="Checker error", message="%s failed to run: %s" % (check["title"], error))
+			Message(title="Checker error", message="%s\n\n%r" % (check["title"], error))
 			return
 		if passed:
 			self.setState(font, check["id"], STATE_VERIFIED)
@@ -632,7 +632,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 			if layers:
 				tab = font.newTab()
 				tab.layers = layers
-			Message(title=check["title"], message=summary)
+			Message(title="Check failed", message="%s\n\n%s" % (check["title"], summary))
 
 	@objc.python_method
 	def tintCheckbox(self, box, verified):

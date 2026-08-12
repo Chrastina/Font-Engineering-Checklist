@@ -360,21 +360,39 @@ def vm_across_masters(font):
 
 @checker("linespacing_across_styles")
 def linespacing_across_styles(font):
-	fonts = list(Glyphs.fonts)
-	if len(fonts) < 2:
-		return False, "Only one font is open — open the rest of the family (e.g. the italic file) and run again.", []
+	# Styles live in masters, in instance-level parameter overrides, and
+	# possibly in other open files of the family — compare all of them.
+	sources = []
+	for openFont in Glyphs.fonts:
+		prefix = "" if openFont is font else "%s — " % (openFont.familyName or "?")
+		for master in openFont.masters:
+			values = dict((key, master.customParameters[key]) for key in VERTICAL_KEYS)
+			sources.append(("%s%s" % (prefix, master.name), values))
+		for instance in staticInstances(openFont):
+			overrides = dict(
+				(key, instance.customParameters[key])
+				for key in VERTICAL_KEYS
+				if instance.customParameters[key] is not None
+			)
+			if overrides:
+				sources.append(("%s%s (instance override)" % (prefix, instance.name or "?"), overrides))
 	problems = []
 	for key in VERTICAL_KEYS:
 		values = {}
-		for openFont in fonts:
-			value = openFont.masters[0].customParameters[key] if openFont.masters else None
-			values.setdefault(str(value), []).append(openFont.familyName or "?")
+		for label, source in sources:
+			if key not in source:
+				continue
+			values.setdefault(str(source[key]), []).append(label)
 		if len(values) > 1:
 			problems.append("%s: %s" % (key, "; ".join(
-				"%s (%s)" % (value, ", ".join(names)) for value, names in values.items())))
+				"%s (%s)" % (value, ", ".join(labels[:4])) for value, labels in values.items())))
 	if problems:
-		return False, "The open fonts disagree on vertical metrics:\n" + bulletList(problems), []
-	return True, "All %i open fonts share the same vertical metrics parameters." % len(fonts), []
+		return False, "Line spacing is inconsistent across styles:\n" + bulletList(problems), []
+	if len(Glyphs.fonts) > 1:
+		scope = "%i open fonts" % len(Glyphs.fonts)
+	else:
+		scope = "%i masters" % len(font.masters)
+	return True, "Vertical metrics agree across %s and all instance overrides." % scope, []
 
 
 @checker("anchor_consistency")
@@ -403,18 +421,30 @@ def anchor_consistency(font):
 	return True, "All glyphs carry the anchors Glyphs expects.", []
 
 
+LIGATURE_FEATURES = ("liga", "dlig", "rlig", "clig", "hlig")
+
+
 @checker("ligature_carets")
 def ligature_carets(font):
+	# Only glyphs actually produced by a ligature feature need carets.
+	targets = set()
+	for feature in font.features:
+		if str(feature.name) not in LIGATURE_FEATURES:
+			continue
+		code = feature.code or ""
+		for match in re.finditer(r"\bby\s+([A-Za-z0-9_.]+)\s*;", code):
+			targets.add(match.group(1))
+	if not targets:
+		return True, "No ligature substitutions found in %s — nothing needs carets." % "/".join(LIGATURE_FEATURES), []
 	offending = []
 	details = []
-	for glyph in font.glyphs:
-		if not glyph.export or "_" not in glyph.name:
+	for name in sorted(targets):
+		glyph = font.glyphs[name]
+		if glyph is None or not glyph.export:
 			continue
 		base = glyph.name.split(".")[0]
 		parts = [part for part in base.split("_") if part]
-		if len(parts) < 2:
-			continue
-		needed = len(parts) - 1
+		needed = len(parts) - 1 if len(parts) >= 2 else 1
 		for layer in glyph.layers:
 			if not layer.isMasterLayer:
 				continue
@@ -424,7 +454,7 @@ def ligature_carets(font):
 				details.append("%s (%s): %i of %i caret anchors" % (glyph.name, layer.name, len(carets), needed))
 	if offending:
 		return False, "Ligatures missing caret anchors:\n" + bulletList(details), offending
-	return True, "All ligatures carry their caret anchors.", []
+	return True, "All %i ligature glyphs carry their caret anchors." % len(targets), []
 
 
 @checker("ss_named")
