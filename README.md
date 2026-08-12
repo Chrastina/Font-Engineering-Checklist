@@ -4,11 +4,11 @@ A QA checklist for your font, living in a floating window inside [Glyphs](https:
 
 By **Michal Chrastina & Kasper Pyndt**.
 
-> **Status: in development (Phase 1).** The checklist window is functional — categories, checkboxes, progress bar, info popovers, per-font saved state, show/hide, custom checks. The checker buttons land in Phase 2.
+> **Status: in development, v0.11.0.** Everything described below works. What is left is polish, an icon, screenshots, outside testing, and Plugin Manager registration.
 
 ## How it works
 
-The checklist has 7 categories — Font Setup, Vertical Metrics, Drawing, Components & Diacritics, Spacing & Kerning, Features, Final QA — with 49 checks. Every check has an info box explaining what it's about.
+The checklist has 7 categories — Font Setup, Vertical Metrics, Drawing, Components & Diacritics, Spacing & Kerning, Features, Final QA — with 53 checks, 26 of which can verify themselves. Every check has an info box explaining what it is about.
 
 There are three kinds of checks:
 
@@ -20,7 +20,7 @@ Other behavior:
 
 - **Progress bar** shows the percentage of visible checks that are ticked.
 - **Show/hide**: click *Edit* above the list and every checkbox becomes an eye icon (like the Reporters palette) — click eyes to hide checks that don't apply to you, then *Done*. Global, per user.
-- **Custom checks**: add your own entries to any category. Stored per machine, not in the font file.
+- **Custom checks**: add your own entries to any category, each with an optional web link and an optional tool picked by searching every command in your Glyphs menus. Stored per machine, not in the font file.
 - **State is saved per font** in `font.userData`, inside the `.glyphs` file. State for checks the current machine doesn't know (e.g. a collaborator's custom checks) is preserved, never pruned.
 - Checker verification is a snapshot — if you edit the font afterwards, re-run the button. It's a checklist, not CI.
 
@@ -53,9 +53,13 @@ The checklist content lives in [`checks.json`](FontEngineeringChecklist.glyphsPl
 
 - **Phase 0 — scaffold** ✓ repo, plugin bundle, full checklist data
 - **Phase 1 — usable checklist** ✓ window UI with categories, checkboxes, progress bar, info popovers, per-font persistence, show/hide, custom checks
-- **Phase 2 — first checkers** ✓ Run Check in the info box: font info, PS name length, weight/width classes, Vendor ID, metrics keys in sync, tabular widths — plus the pass/fail machinery (green verified ticks, failure report tabs)
-- **Phase 3 — remaining checkers**: vertical metrics comparisons, small caps coverage, stylistic sets, anchors, carets, contour directions…
-- **Phase 4 — release**: polish, docs, beta testers, Plugin Manager registration
+- **Phase 2 — first checkers** ✓ Run Check in the info box, plus the pass/fail machinery (green verified ticks, failure report tabs)
+- **Phase 3 — all checkers** ✓ 26 of them, each validated against a production family
+- **Phase 4 — release**: icon, screenshots, beta testers, Plugin Manager registration
+
+## Feedback welcome
+
+Useful things to try: run the checkers against a real family and see whether any finding is wrong or noisy, add a custom check with a tool attached, hide a category and watch the progress bar, and save a file then reopen it to confirm the ticks come back. Wording of the checks and info boxes is still open to argument — they follow one convention (imperative title, then what to do and why, in plain language), so a change to one should fit the rest.
 
 ## Tools this checklist recommends
 
