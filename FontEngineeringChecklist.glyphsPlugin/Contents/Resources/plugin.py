@@ -772,10 +772,11 @@ class FontEngineeringChecklist(GeneralPlugin):
 			(85, -110, -MARGIN, 22), "", placeholder="Optional web page, e.g. a tutorial")
 		self.addSheet.toolLabel = vanilla.TextBox((MARGIN, -73, 65, 16), "Tool", sizeStyle="small")
 		self.addSheet.toolCombo = vanilla.ComboBox(
-			(85, -76, -MARGIN, 22), sorted(self.catalog), completes=True)
+			(85, -76, -MARGIN, 22), sorted(self.catalog),
+			completes=True, callback=self.toolSearchChanged)
 		self.addSheet.toolHint = vanilla.TextBox(
 			(85, -50, -MARGIN, 14),
-			"Start typing to find one of your %i installed scripts and plugins." % len(self.catalog),
+			"Type any part of a command name — %i found in your menus." % len(self.catalog),
 			sizeStyle="small",
 		)
 		self.addSheet.cancelButton = vanilla.Button((-185, -35, 80, 20), "Cancel", callback=self.addSheetCancel)
@@ -785,33 +786,66 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def toolCatalog(self):
-		"""Every reporter, script and filter installed right now, keyed by the
-		name shown in the menus."""
+		"""Every command in the menus, the way the Help menu search sees them:
+		the command name first, its menu path after it."""
 		catalog = {}
 		for reporter in Glyphs.reporters:
 			try:
-				title = str(reporter.title())
+				title = str(reporter.title()).strip()
 			except Exception:
 				continue
 			if title:
-				catalog[title] = {"type": "reporter", "match": [title], "label": title}
+				catalog["%s  —  Reporter" % title] = {
+					"type": "reporter", "match": [title], "label": title,
+				}
 
-		def collect(menu, depth=0):
+		def collect(menu, path):
 			for item in menu.itemArray():
+				if item.isSeparatorItem():
+					continue
+				title = str(item.title()).strip()
+				if not title:
+					continue
 				if item.hasSubmenu():
-					collect(item.submenu(), depth + 1)
-				elif item.action() and not item.isSeparatorItem():
-					title = str(item.title()).strip()
-					# Skip one-word system entries; scripts have real names.
-					if len(title) > 3 and title not in catalog:
-						catalog[title] = {"type": "menu", "match": [title], "label": title}
+					collect(item.submenu(), path + [title])
+					continue
+				if not item.action():
+					continue
+				display = "%s  —  %s" % (title, " ▸ ".join(path))
+				if display not in catalog:
+					catalog[display] = {"type": "menu", "match": [title], "label": title}
 
 		mainMenu = NSApp.mainMenu()
-		wanted = ("script", "filter")
-		for item in mainMenu.itemArray():
-			if item.hasSubmenu() and str(item.title()).strip().lower() in wanted:
-				collect(item.submenu())
+		items = list(mainMenu.itemArray())
+		for index, item in enumerate(items):
+			# Skip the app menu itself and Help — everything else is fair game.
+			if index == 0 or str(item.title()).strip().lower() == "help":
+				continue
+			if item.hasSubmenu():
+				collect(item.submenu(), [str(item.title()).strip()])
 		return catalog
+
+	@objc.python_method
+	def toolSearchChanged(self, sender):
+		"""Filters the list to everything containing what's typed, the way the
+		Help menu search narrows as you go."""
+		if getattr(self, "_filteringTools", False):
+			return
+		text = sender.get().strip().lower()
+		catalog = getattr(self, "catalog", {})
+		if not text:
+			matches = sorted(catalog)
+		else:
+			words = text.split()
+			matches = sorted(
+				display for display in catalog
+				if all(word in display.lower() for word in words)
+			)
+		self._filteringTools = True
+		try:
+			sender.setItems(matches[:60])
+		finally:
+			self._filteringTools = False
 
 	@objc.python_method
 	def addSheetCancel(self, sender):
@@ -841,11 +875,17 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 		toolName = self.addSheet.toolCombo.get().strip()
 		if toolName:
-			run = getattr(self, "catalog", {}).get(toolName)
+			catalog = getattr(self, "catalog", {})
+			run = catalog.get(toolName)
 			if run is None:
-				# Typed by hand: match on the text and let the popover decide
-				# whether it's actually installed.
-				run = {"type": "menu", "match": [toolName], "label": toolName}
+				# Half-typed or hand-written: take the single match if the text
+				# identifies one, otherwise match on the text itself.
+				matches = [key for key in catalog if toolName.lower() in key.lower()]
+				if len(matches) == 1:
+					run = catalog[matches[0]]
+				else:
+					name = toolName.split("  —  ")[0].strip()
+					run = {"type": "menu", "match": [name], "label": name}
 			entry["run"] = run
 
 		custom = self.plainCustomChecks()
