@@ -760,29 +760,63 @@ class FontEngineeringChecklist(GeneralPlugin):
 	def openAddSheet(self, sender):
 		categoryNames = [c["name"] for c in self.orderedCategories()]
 		self.catalog = self.toolCatalog()
-		self.addSheet = vanilla.Sheet((420, 340), self.w)
+		self.addSheet = vanilla.Sheet((470, 430), self.w)
 		self.addSheet.titleLabel = vanilla.TextBox((MARGIN, 17, 65, 16), "Title", sizeStyle="small")
 		self.addSheet.titleField = vanilla.EditText((85, 14, -MARGIN, 22), "")
 		self.addSheet.catLabel = vanilla.TextBox((MARGIN, 49, 65, 16), "Category", sizeStyle="small")
 		self.addSheet.catPopup = vanilla.PopUpButton((85, 46, -MARGIN, 22), categoryNames)
 		self.addSheet.infoLabel = vanilla.TextBox((MARGIN, 81, 65, 16), "Info", sizeStyle="small")
-		self.addSheet.infoField = vanilla.TextEditor((85, 78, -MARGIN, -116), "")
-		self.addSheet.linkLabel = vanilla.TextBox((MARGIN, -107, 65, 16), "Link", sizeStyle="small")
+		self.addSheet.infoField = vanilla.TextEditor((85, 78, -MARGIN, 96), "")
+		self.addSheet.linkLabel = vanilla.TextBox((MARGIN, 189, 65, 16), "Link", sizeStyle="small")
 		self.addSheet.linkField = vanilla.EditText(
-			(85, -110, -MARGIN, 22), "", placeholder="Optional web page, e.g. a tutorial")
-		self.addSheet.toolLabel = vanilla.TextBox((MARGIN, -73, 65, 16), "Tool", sizeStyle="small")
-		self.addSheet.toolCombo = vanilla.ComboBox(
-			(85, -76, -MARGIN, 22), sorted(self.catalog),
-			completes=True, callback=self.toolSearchChanged)
-		self.addSheet.toolHint = vanilla.TextBox(
-			(85, -50, -MARGIN, 14),
-			"Type any part of a command name — %i found in your menus." % len(self.catalog),
-			sizeStyle="small",
+			(85, 186, -MARGIN, 22), "", placeholder="Optional web page, e.g. a tutorial")
+		self.addSheet.toolLabel = vanilla.TextBox((MARGIN, 221, 65, 16), "Tool", sizeStyle="small")
+		self.addSheet.toolSearch = vanilla.SearchBox(
+			(85, 218, -MARGIN, 22), "",
+			placeholder="Search your %i menu commands — then click one below" % len(self.catalog),
+			callback=self.toolSearchChanged,
 		)
+		# A search field only reports on Enter unless told to send every
+		# keystroke — without this the list never narrows as you type.
+		try:
+			cell = self.addSheet.toolSearch.getNSSearchField().cell()
+			cell.setSendsWholeSearchString_(False)
+			cell.setSendsSearchStringImmediately_(True)
+		except Exception:
+			pass
+		self.addSheet.toolList = vanilla.List(
+			(85, 248, -MARGIN, -47), self.matchingTools(""),
+			selectionCallback=self.toolSelected,
+		)
+		self.addSheet.selectedLabel = vanilla.TextBox(
+			(MARGIN, -40, 260, 14), "No tool selected", sizeStyle="small")
 		self.addSheet.cancelButton = vanilla.Button((-185, -35, 80, 20), "Cancel", callback=self.addSheetCancel)
 		self.addSheet.addButton = vanilla.Button((-95, -35, 80, 20), "Add", callback=self.addSheetAdd)
 		self.addSheet.setDefaultButton(self.addSheet.addButton)
+		self.selectedTool = None
 		self.addSheet.open()
+
+	@objc.python_method
+	def matchingTools(self, query):
+		catalog = getattr(self, "catalog", {})
+		words = query.strip().lower().split()
+		if not words:
+			return sorted(catalog)
+		return sorted(
+			display for display in catalog
+			if all(word in display.lower() for word in words)
+		)
+
+	@objc.python_method
+	def toolSelected(self, sender):
+		selection = sender.getSelection()
+		if not selection:
+			return
+		items = sender.get()
+		index = selection[0]
+		if 0 <= index < len(items):
+			self.selectedTool = str(items[index])
+			self.addSheet.selectedLabel.set("Tool: %s" % self.selectedTool.split("  —  ")[0])
 
 	@objc.python_method
 	def toolCatalog(self):
@@ -827,25 +861,11 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def toolSearchChanged(self, sender):
-		"""Filters the list to everything containing what's typed, the way the
-		Help menu search narrows as you go."""
-		if getattr(self, "_filteringTools", False):
-			return
-		text = sender.get().strip().lower()
-		catalog = getattr(self, "catalog", {})
-		if not text:
-			matches = sorted(catalog)
-		else:
-			words = text.split()
-			matches = sorted(
-				display for display in catalog
-				if all(word in display.lower() for word in words)
-			)
-		self._filteringTools = True
-		try:
-			sender.setItems(matches[:60])
-		finally:
-			self._filteringTools = False
+		"""Narrows the list as you type, the way the Help menu search does."""
+		matches = self.matchingTools(sender.get())
+		self.addSheet.toolList.set(matches)
+		if self.selectedTool in matches:
+			self.addSheet.toolList.setSelection([matches.index(self.selectedTool)])
 
 	@objc.python_method
 	def addSheetCancel(self, sender):
@@ -873,20 +893,10 @@ class FontEngineeringChecklist(GeneralPlugin):
 			label = url.split("://", 1)[1].split("/")[0] or "Open link"
 			entry["links"] = [{"label": label, "url": url}]
 
-		toolName = self.addSheet.toolCombo.get().strip()
-		if toolName:
-			catalog = getattr(self, "catalog", {})
-			run = catalog.get(toolName)
-			if run is None:
-				# Half-typed or hand-written: take the single match if the text
-				# identifies one, otherwise match on the text itself.
-				matches = [key for key in catalog if toolName.lower() in key.lower()]
-				if len(matches) == 1:
-					run = catalog[matches[0]]
-				else:
-					name = toolName.split("  —  ")[0].strip()
-					run = {"type": "menu", "match": [name], "label": name}
-			entry["run"] = run
+		if self.selectedTool:
+			run = getattr(self, "catalog", {}).get(self.selectedTool)
+			if run is not None:
+				entry["run"] = run
 
 		custom = self.plainCustomChecks()
 		custom.append(entry)
