@@ -565,13 +565,14 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 		width = 320
 		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
-		height = 10 + 22 + textHeight + actionCount * 24 + len(links) * 24 + 8
+		bodyTop = 38
+		height = 10 + bodyTop - 10 + textHeight + actionCount * 24 + len(links) * 24 + 10
 
 		self.popover = vanilla.Popover((width, height), behavior="transient")
 		self.popoverCheckId = checkId
 		self.popover.title = vanilla.TextBox((10, 8, -10, 17), title)
-		self.popover.text = vanilla.TextBox((10, 30, -10, textHeight), info, sizeStyle="small")
-		y = 30 + textHeight + 2
+		self.popover.text = vanilla.TextBox((10, bodyTop, -10, textHeight), info, sizeStyle="small")
+		y = bodyTop + textHeight + 4
 		if checkerAvailable:
 			self.popover.checkButton = vanilla.Button(
 				(10, y, -10, 18), "Run Check", sizeStyle="small",
