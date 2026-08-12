@@ -22,7 +22,7 @@ from GlyphsApp.plugins import GeneralPlugin
 from AppKit import (
 	NSApp, NSMenuItem, NSWorkspace, NSURL, NSView, NSImage, NSColor, NSFont,
 	NSAttributedString, NSForegroundColorAttributeName, NSFontAttributeName,
-	NSButton, NSNotificationCenter,
+	NSButton, NSNotificationCenter, NSTextField,
 	NSMutableParagraphStyle, NSParagraphStyleAttributeName,
 )
 
@@ -608,14 +608,27 @@ class FontEngineeringChecklist(GeneralPlugin):
 
 	@objc.python_method
 	def measuredTextHeight(self, text, width):
-		"""How tall the text really renders at this width — no guessing, no
-		minimum that would pad short descriptions."""
-		attributed = NSAttributedString.alloc().initWithString_attributes_(text, {
-			NSFontAttributeName: NSFont.systemFontOfSize_(NSFont.smallSystemFontSize()),
-		})
-		rect = attributed.boundingRectWithSize_options_(
-			(width, 10000), NS_STRING_DRAWING_USES_LINE_FRAGMENT_ORIGIN)
-		return int(math.ceil(rect.size.height)) + 2
+		"""How tall the text really renders at this width. Asks a text field
+		configured like the one that will display it: a text field insets its
+		content, so it wraps sooner than measuring the bare string suggests."""
+		bounds = ((0, 0), (width, 10000))
+		font = NSFont.systemFontOfSize_(NSFont.smallSystemFontSize())
+		try:
+			field = NSTextField.alloc().initWithFrame_(bounds)
+			field.setBezeled_(False)
+			field.setDrawsBackground_(False)
+			field.setEditable_(False)
+			field.setSelectable_(False)
+			field.setFont_(font)
+			field.cell().setWraps_(True)
+			field.setStringValue_(text)
+			height = field.cell().cellSizeForBounds_(bounds).height
+		except Exception:
+			attributed = NSAttributedString.alloc().initWithString_attributes_(
+				text, {NSFontAttributeName: font})
+			height = attributed.boundingRectWithSize_options_(
+				(width, 10000), NS_STRING_DRAWING_USES_LINE_FRAGMENT_ORIGIN).size.height
+		return int(math.ceil(height)) + 2
 
 	@objc.python_method
 	def popoverDidClose(self, sender):
