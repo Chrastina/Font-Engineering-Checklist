@@ -388,15 +388,19 @@ class FontEngineeringChecklist(GeneralPlugin):
 		titleX = MARGIN + 31
 
 		if self.editMode:
+			# Nudged left of the checkbox x: the eye image centers in its
+			# frame while the checkbox glyph has an internal inset, so this
+			# optically aligns the two.
+			eyeX = controlX - 3
 			eyeImage = self.eyeImage(not isHidden)
 			if eyeImage is not None:
 				eye = vanilla.ImageButton(
-					(controlX, y + 3, 18, 16), imageObject=eyeImage, bordered=False,
+					(eyeX, y + 3, 18, 16), imageObject=eyeImage, bordered=False,
 					callback=lambda sender, cid=check["id"]: self.visibilityToggled(cid),
 				)
 			else:
 				eye = vanilla.Button(
-					(controlX, y + 3, 18, 16), "👁" if not isHidden else "–", sizeStyle="small",
+					(eyeX, y + 3, 18, 16), "👁" if not isHidden else "–", sizeStyle="small",
 					callback=lambda sender, cid=check["id"]: self.visibilityToggled(cid),
 				)
 				eye.getNSButton().setBordered_(False)
