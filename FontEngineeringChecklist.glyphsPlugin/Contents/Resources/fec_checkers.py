@@ -204,31 +204,42 @@ def metrics_keys_sync(font):
 
 @checker("tabular_widths")
 def tabular_widths(font):
-	tabularGlyphs = [
-		glyph for glyph in font.glyphs
-		if glyph.export and (".tf" in glyph.name or ".tosf" in glyph.name)
-	]
-	if not tabularGlyphs:
+	# Group by the full suffix chain: .tf, .tf.sc, .tosf, .tfcentered …
+	# each group legitimately has its own tabular width.
+	groups = {}
+	for glyph in font.glyphs:
+		if not glyph.export:
+			continue
+		parts = glyph.name.split(".")
+		if len(parts) < 2:
+			continue
+		if not any(part.startswith("tf") or part.startswith("tosf") for part in parts[1:]):
+			continue
+		groups.setdefault(".".join(parts[1:]), []).append(glyph)
+	if not groups:
 		return True, "No tabular glyphs (.tf/.tosf) in the font — nothing to check.", []
 	offending = []
 	details = []
-	for master in font.masters:
-		widths = {}
-		for glyph in tabularGlyphs:
-			layer = glyph.layers[master.id]
-			if layer is None:
-				continue
-			widths.setdefault(round(layer.width, 3), []).append(layer)
-		if len(widths) > 1:
-			majority = max(widths.items(), key=lambda item: len(item[1]))[0]
-			for width, layers in widths.items():
-				if width != majority:
-					offending.extend(layers)
-					names = ", ".join(layer.parent.name for layer in layers)
-					details.append("%s: %s at %g (majority width %g)" % (master.name, names, width, majority))
+	total = 0
+	for suffix, glyphs in sorted(groups.items()):
+		total += len(glyphs)
+		for master in font.masters:
+			widths = {}
+			for glyph in glyphs:
+				layer = glyph.layers[master.id]
+				if layer is None:
+					continue
+				widths.setdefault(round(layer.width, 3), []).append(layer)
+			if len(widths) > 1:
+				majority = max(widths.items(), key=lambda item: len(item[1]))[0]
+				for width, layers in widths.items():
+					if width != majority:
+						offending.extend(layers)
+						names = ", ".join(layer.parent.name for layer in layers)
+						details.append("%s, .%s: %s at %g (majority %g)" % (master.name, suffix, names, width, majority))
 	if offending:
-		return False, "Tabular widths differ:\n" + bulletList(details), offending
-	return True, "All %i tabular glyphs share one width per master." % len(tabularGlyphs), []
+		return False, "Tabular widths differ within their group:\n" + bulletList(details), offending
+	return True, "All %i tabular glyphs share one width per group and master." % total, []
 
 
 VERTICAL_KEYS = (
@@ -397,6 +408,21 @@ def linespacing_across_styles(font):
 
 @checker("anchor_consistency")
 def anchor_consistency(font):
+	# Only anchors that a mark in this font actually attaches to are
+	# required — GlyphData also lists anchors (like 'center') that most
+	# designs never use.
+	attachmentNames = set()
+	masterId = font.masters[0].id
+	for glyph in font.glyphs:
+		layer = glyph.layers[masterId]
+		if layer is None:
+			continue
+		for anchor in layer.anchors:
+			name = str(anchor.name)
+			if name.startswith("_"):
+				attachmentNames.add(name[1:].split("@")[0])
+	if not attachmentNames:
+		return True, "No combining marks with attachment anchors in the font — nothing to enforce.", []
 	offending = []
 	details = []
 	for glyph in font.glyphs:
@@ -406,16 +432,21 @@ def anchor_consistency(font):
 		expected = list(info.anchors) if (info and info.anchors) else None
 		if not expected:
 			continue
+		# GlyphData may carry position specs ('top@x*0.5') — names only.
+		expected = [str(name).split("@")[0] for name in expected]
+		expected = [name for name in expected if name in attachmentNames]
+		if not expected:
+			continue
 		for layer in glyph.layers:
 			if not layer.isMasterLayer:
 				continue
 			if layer.components and not layer.paths:
 				continue  # composites inherit anchors from their components
-			present = set(str(anchor.name) for anchor in layer.anchors)
-			missing = [name for name in expected if str(name) not in present]
+			present = set(str(anchor.name).split("@")[0] for anchor in layer.anchors)
+			missing = [name for name in expected if name not in present]
 			if missing:
 				offending.append(layer)
-				details.append("%s (%s): missing %s" % (glyph.name, layer.name, ", ".join(str(m) for m in missing)))
+				details.append("%s (%s): missing %s" % (glyph.name, layer.name, ", ".join(missing)))
 	if offending:
 		return False, "Layers missing expected anchors:\n" + bulletList(details), offending
 	return True, "All glyphs carry the anchors Glyphs expects.", []
@@ -494,7 +525,8 @@ def ss_coverage(font):
 	for suffix in suffixes:
 		bases = set(name[:-(len(suffix) + 1)] for name in names if name.endswith("." + suffix))
 		for glyph in font.glyphs:
-			if not glyph.export or glyph.name.endswith("." + suffix):
+			# glyphs that are themselves a stylistic variant don't need a twin
+			if not glyph.export or re.search(r"\.ss\d\d", glyph.name):
 				continue
 			layer = glyph.layers[masterId]
 			if layer is None or not layer.components:
