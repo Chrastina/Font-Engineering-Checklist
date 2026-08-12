@@ -525,13 +525,17 @@ def ss_coverage(font):
 	for suffix in suffixes:
 		bases = set(name[:-(len(suffix) + 1)] for name in names if name.endswith("." + suffix))
 		for glyph in font.glyphs:
-			# glyphs that are themselves a stylistic variant don't need a twin
-			if not glyph.export or re.search(r"\.ss\d\d", glyph.name):
+			# Only plain composites: a glyph that already carries a suffix
+			# (.ssXX, .sc, .locl…) follows its own naming logic.
+			if not glyph.export or "." in glyph.name:
 				continue
 			layer = glyph.layers[masterId]
 			if layer is None or not layer.components:
 				continue
-			usedBases = [c.componentName for c in layer.components if c.componentName in bases]
+			usedBases = [
+				c.componentName for c in layer.components
+				if c.componentName in bases and not str(c.componentName).startswith("_")
+			]
 			if usedBases and ("%s.%s" % (glyph.name, suffix)) not in names:
 				missing.append("%s.%s (uses %s)" % (glyph.name, suffix, ", ".join(usedBases)))
 				layers.append(layer)
@@ -642,44 +646,6 @@ def default_master(font):
 	), []
 
 
-@checker("copyright_years")
-def copyright_years(font):
-	text = (font.copyright or "").strip()
-	if not text:
-		return False, "The copyright field is empty.", []
-	years = re.findall(r"(19|20)\d{2}", text)
-	if not years:
-		return False, "The copyright string carries no year:\n%s" % text, []
-	fullYears = [int(match.group()) for match in re.finditer(r"(?:19|20)\d{2}", text)]
-	newest = max(fullYears)
-	try:
-		fileYear = font.date.year()
-	except Exception:
-		fileYear = None
-	if fileYear and newest < int(fileYear):
-		return False, (
-			"The newest copyright year is %i but the file was last touched in %i — update the years if the work continued:\n%s"
-			% (newest, int(fileYear), text)
-		), []
-	return True, "Copyright reads:\n%s\n\nConfirm the owner is correct." % text, []
-
-
-@checker("panose")
-def panose(font):
-	value = font.customParameters["panose"]
-	if value is None:
-		value = font.customParameters["openTypeOS2Panose"]
-	if not value:
-		return True, "No PANOSE set — it defaults to all zeros ('any'), which is the safe neutral.", []
-	try:
-		numbers = [int(item) for item in list(value)]
-	except (TypeError, ValueError):
-		return False, "PANOSE is set to something unreadable: %r" % (value,), []
-	if not any(numbers):
-		return True, "PANOSE is all zeros ('any') — safely neutral.", []
-	return True, "PANOSE is set to %s — confirm the classification is deliberate." % numbers, []
-
-
 SPACE_GLYPHS = (
 	"nbspace", "figurespace", "thinspace", "hairspace",
 	"emspace", "enspace", "punctuationspace", "zerowidthspace",
@@ -696,76 +662,6 @@ def space_glyphs(font):
 			% bulletList(missing)
 		), []
 	return True, "All the usual space characters are present.", []
-
-
-@checker("space_width")
-def space_width(font):
-	space = font.glyphs["space"]
-	if space is None:
-		return False, "There is no space glyph.", []
-	problems = []
-	offending = []
-	nbspace = font.glyphs["nbspace"]
-	for master in font.masters:
-		layer = space.layers[master.id]
-		if layer is None:
-			continue
-		if layer.width <= 0:
-			problems.append("%s: space has zero width" % master.name)
-			offending.append(layer)
-			continue
-		if nbspace is not None:
-			nbLayer = nbspace.layers[master.id]
-			if nbLayer is not None and round(nbLayer.width, 2) != round(layer.width, 2):
-				problems.append("%s: nbspace is %g but space is %g" % (master.name, nbLayer.width, layer.width))
-				offending.append(nbLayer)
-	if problems:
-		return False, "Space width problems:\n" + bulletList(problems), offending
-	return True, "Space has a real width in every master and nbspace matches it. Judge the actual width in running text yourself.", []
-
-
-@checker("alignment_zones")
-def alignment_zones(font):
-	tolerance = 8
-	details = []
-	offending = []
-	checkedAny = False
-	for master in font.masters:
-		zones = [zone for zone in master.alignmentZones]
-		if not zones:
-			continue
-		checkedAny = True
-		edges = []
-		for zone in zones:
-			position, size = float(zone.position), float(zone.size)
-			edges.append((min(position, position + size), max(position, position + size)))
-		for glyph in font.glyphs:
-			if not glyph.export or glyph.category not in ("Letter", "Number"):
-				continue
-			layer = glyph.layers[master.id]
-			if layer is None or not layer.paths:
-				continue
-			bounds = layer.bounds
-			if bounds.size.height == 0:
-				continue
-			for edgeName, value in (("top", bounds.origin.y + bounds.size.height), ("bottom", bounds.origin.y)):
-				inside = any(low <= value <= high for low, high in edges)
-				if inside:
-					continue
-				near = [(low, high) for low, high in edges if min(abs(value - low), abs(value - high)) <= tolerance]
-				if near:
-					low, high = near[0]
-					details.append("%s (%s): %s at %g, just outside zone %g–%g" % (
-						glyph.name, master.name, edgeName, value, low, high))
-					offending.append(layer)
-	if not checkedAny:
-		return True, "No alignment zones defined — nothing to compare against.", []
-	if details:
-		return False, (
-			"Report — extremes sitting within %i units of a zone but not inside it:\n%s\n\n"
-			"Some of these are intentional; judge each one." % (tolerance, bulletList(details))
-		), offending
-	return True, "No near-miss extremes: shapes either sit inside their zones or clearly away from them.", []
 
 
 @checker("empty_glyphs")
@@ -819,30 +715,6 @@ def duplicate_unicodes(font):
 	return True, "No duplicate Unicode values.", []
 
 
-@checker("components_nonexporting")
-def components_nonexporting(font):
-	offending = []
-	details = []
-	for glyph in font.glyphs:
-		if not glyph.export:
-			continue
-		for layer in glyph.layers:
-			if not layer.isMasterLayer:
-				continue
-			for component in layer.components:
-				base = font.glyphs[component.componentName]
-				if base is not None and not base.export and not str(base.name).startswith("_"):
-					offending.append(layer)
-					details.append("%s (%s) uses non-exporting '%s'" % (glyph.name, layer.name, base.name))
-	if offending:
-		return False, (
-			"Components pointing at non-exporting glyphs:\n%s\n\n"
-			"These export fine (Glyphs decomposes them), but it often signals a mistake."
-			% bulletList(details)
-		), offending
-	return True, "No components reference non-exporting glyphs.", []
-
-
 @checker("feature_code_compiles")
 def feature_code_compiles(font):
 	try:
@@ -863,23 +735,6 @@ def feature_code_compiles(font):
 	return True, "All feature code, prefixes and classes compile without errors.", []
 
 
-@checker("glyph_names_legal")
-def glyph_names_legal(font):
-	problems = []
-	pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9._]*$")
-	for glyph in font.glyphs:
-		if not glyph.export:
-			continue
-		name = str(glyph.name)
-		if len(name) > 63:
-			problems.append("%s (%i characters, limit 63)" % (name, len(name)))
-		elif not pattern.match(name):
-			problems.append("%s (illegal characters, or starts with a digit)" % name)
-	if problems:
-		return False, "Glyph names that break the specification:\n" + bulletList(problems), []
-	return True, "All exporting glyph names are legal.", []
-
-
 @checker("brace_layers_in_designspace")
 def brace_layers_in_designspace(font):
 	if not font.axes:
@@ -896,6 +751,8 @@ def brace_layers_in_designspace(font):
 	problems = []
 	offending = []
 	for glyph in font.glyphs:
+		if not glyph.export:
+			continue
 		for layer in glyph.layers:
 			if not layer.isSpecialLayer or not layer.attributes:
 				continue
@@ -940,13 +797,15 @@ def smallcaps_coverage(font):
 	layers = []
 	masterId = font.masters[0].id
 	for glyph in font.glyphs:
-		if not glyph.export or not glyph.unicode:
+		# Letters only — roman numerals and other uppercase symbols don't
+		# take small cap forms.
+		if not glyph.export or not glyph.unicode or glyph.category != "Letter":
 			continue
 		try:
 			character = glyph.string
 		except AttributeError:
 			character = None
-		if not character or not character.isupper():
+		if not character or len(character) != 1 or not character.isupper():
 			continue
 		candidates = ["%s%s" % (glyph.name, scSuffix)]
 		lowered = character.lower()

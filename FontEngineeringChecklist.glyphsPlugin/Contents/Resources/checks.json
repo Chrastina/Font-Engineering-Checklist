@@ -131,26 +131,16 @@
 		{
 			"id": "copyright",
 			"category": "font-setup",
-			"type": "build",
+			"type": "manual",
 			"title": "Copyright years and ownership are correct",
-			"info": "Check the copyright string in Font Info: right years, right owner, consistent with the license text.",
-			"checker": "copyright_years"
+			"info": "Check the copyright string in Font Info: right years, right owner, consistent with the license text."
 		},
 		{
 			"id": "panose",
 			"category": "font-setup",
-			"type": "build",
+			"type": "manual",
 			"title": "PANOSE values are intentional or safely neutral",
-			"info": "Unset PANOSE defaults to all zeros ('any'), which is safe. If you set values, make sure the classification is deliberate, not leftover from another project.",
-			"checker": "panose"
-		},
-		{
-			"id": "glyph-names-legal",
-			"category": "font-setup",
-			"type": "build",
-			"checker": "glyph_names_legal",
-			"title": "Glyph names are legal",
-			"info": "Exporting glyph names must start with a letter or underscore, contain only letters, digits, dots and underscores, and stay at or under 63 characters. Illegal names break compilation or get silently renamed."
+			"info": "Unset PANOSE defaults to all zeros ('any'), which is safe. If you set values, make sure the classification is deliberate, not leftover from another project."
 		},
 		{
 			"id": "missing-unicodes",
@@ -212,10 +202,9 @@
 		{
 			"id": "alignment-zones",
 			"category": "drawing",
-			"type": "build",
+			"type": "manual",
 			"title": "Shapes correspond to alignment zones",
-			"info": "Overshoots of round shapes should land inside the zones defined in Font Info > Masters, flats on the flat edge. Zones that don't catch your shapes are worse than no zones.",
-			"checker": "alignment_zones"
+			"info": "Overshoots of round shapes should land inside the zones defined in Font Info > Masters, flats on the flat edge. Zones that don't catch your shapes are worse than no zones. This stays a manual read: on real fonts, near-misses are as often deliberate as accidental."
 		},
 		{
 			"id": "stems",
@@ -354,10 +343,9 @@
 		{
 			"id": "space-width",
 			"category": "drawing",
-			"type": "build",
+			"type": "manual",
 			"title": "Space has an appropriate width",
-			"info": "Test the space in running text at several weights — it should hold words apart without opening holes. Don't forget the no-break space matches it.",
-			"checker": "space_width"
+			"info": "Test the space in running text at several weights — it should hold words apart without opening holes. Don't forget the no-break space matches it."
 		},
 		{
 			"id": "space-glyphs",
@@ -438,14 +426,6 @@
 			"checker": "ligature_carets",
 			"title": "Ligature carets are set up",
 			"info": "Ligatures need caret anchors (caret_1, caret_2…) so text editors can place the cursor between the components. The checker verifies every exporting ligature has them."
-		},
-		{
-			"id": "components-nonexporting",
-			"category": "components-diacritics",
-			"type": "build",
-			"checker": "components_nonexporting",
-			"title": "Components do not reference non-exporting glyphs",
-			"info": "Composites built from glyphs that don't export still work (Glyphs decomposes them), but it usually signals a mistake in how the glyph was built. Underscore glyphs like _part.something are exempt."
 		},
 		{
 			"id": "metrics-keys-sync",
@@ -561,7 +541,14 @@
 			"category": "features",
 			"type": "tool",
 			"title": "Math symbols are tabular",
-			"info": "Plus, minus, equals, multiply etc. should share the tabular width so they align in columns of figures. (Tool recommendation to be decided.)"
+			"info": "Plus, minus, equals, multiply etc. should share the tabular width so they align in columns of figures. Tabular Checker (mekkablue > Spacing) reports every glyph whose width differs from the tabular width.",
+			"run": {
+				"type": "menu",
+				"match": [
+					"Tabular Checker"
+				],
+				"label": "Tabular Checker"
+			}
 		},
 		{
 			"id": "fractions",
