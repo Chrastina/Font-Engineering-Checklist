@@ -12,6 +12,7 @@
 
 from __future__ import division, print_function, unicode_literals
 import json
+import math
 import os
 import time
 import uuid
@@ -60,6 +61,7 @@ NS_VIEW_MIN_X_MARGIN = 1
 NS_BEZEL_DISCLOSURE = 5
 NS_BUTTON_TYPE_PUSHONPUSHOFF = 1
 NSVIEW_FRAME_CHANGED = "NSViewFrameDidChangeNotification"
+NS_STRING_DRAWING_USES_LINE_FRAGMENT_ORIGIN = 1
 
 
 # A flipped document view keeps short content pinned to the top of the scroll
@@ -568,7 +570,7 @@ class FontEngineeringChecklist(GeneralPlugin):
 		side = 10
 		titleTop, titleHeight, gap = 8, 17, 13
 		width = 320
-		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
+		textHeight = self.measuredTextHeight(info, width - 2 * side)
 		bodyTop = titleTop + titleHeight + gap
 		buttonCount = actionCount + len(links)
 		if buttonCount:
@@ -603,6 +605,17 @@ class FontEngineeringChecklist(GeneralPlugin):
 			y += 24
 		self.popover.bind("did close", self.popoverDidClose)
 		self.popover.open(parentView=sender, preferredEdge="right")
+
+	@objc.python_method
+	def measuredTextHeight(self, text, width):
+		"""How tall the text really renders at this width — no guessing, no
+		minimum that would pad short descriptions."""
+		attributed = NSAttributedString.alloc().initWithString_attributes_(text, {
+			NSFontAttributeName: NSFont.systemFontOfSize_(NSFont.smallSystemFontSize()),
+		})
+		rect = attributed.boundingRectWithSize_options_(
+			(width, 10000), NS_STRING_DRAWING_USES_LINE_FRAGMENT_ORIGIN)
+		return int(math.ceil(rect.size.height)) + 2
 
 	@objc.python_method
 	def popoverDidClose(self, sender):
