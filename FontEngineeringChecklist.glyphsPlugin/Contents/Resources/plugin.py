@@ -738,9 +738,40 @@ class FontEngineeringChecklist(GeneralPlugin):
 			item = self.findMenuItem(NSApp.mainMenu(), needles)
 			if item is None:
 				return False
+			# 'Show …' commands toggle. If the thing is already on, opening it
+			# again would switch it off — so leave it alone.
+			if self.menuItemIsOn(item):
+				return True
 			NSApp.sendAction_to_from_(item.action(), item.target(), item)
 			return True
 		return False
+
+	@objc.python_method
+	def menuItemIsOn(self, item):
+		"""Whether a toggling menu item is currently switched on."""
+		title = str(item.title()).strip()
+		# Reporters are the common case and Glyphs knows their state directly,
+		# which is more reliable than a menu state that only refreshes when
+		# the menu is opened.
+		if title.lower().startswith("show "):
+			name = title[5:].strip().lower().replace(" ", "")
+			active = self.activeReporterNames()
+			if active is not None and name in active:
+				return True
+		try:
+			return int(item.state()) == 1
+		except Exception:
+			return False
+
+	@objc.python_method
+	def activeReporterNames(self):
+		try:
+			return set(
+				str(reporter.title()).strip().lower().replace(" ", "")
+				for reporter in Glyphs.activeReporters
+			)
+		except (AttributeError, TypeError):
+			return None
 
 	@objc.python_method
 	def findMenuItem(self, menu, needles):
