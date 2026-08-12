@@ -188,11 +188,7 @@ def metrics_keys_sync(font):
 			if not (layer.isMasterLayer or layer.isSpecialLayer):
 				continue
 			try:
-				outOfSync = (
-					layer.leftMetricsKeyOutOfSync()
-					or layer.rightMetricsKeyOutOfSync()
-					or layer.widthMetricsKeyOutOfSync()
-				)
+				outOfSync = layer.metricsKeysOutOfSync()
 			except AttributeError:
 				return False, "This Glyphs version doesn't expose the metrics-key sync state — please report which Glyphs version you're on.", []
 			if outOfSync:
