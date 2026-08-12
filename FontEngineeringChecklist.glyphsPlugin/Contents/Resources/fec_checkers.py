@@ -14,6 +14,9 @@ anything fuzzier belongs to a recommended tool or the user's eyes.
 """
 
 from __future__ import division, print_function, unicode_literals
+import re
+
+from GlyphsApp import Glyphs
 
 
 CHECKERS = {}
@@ -226,3 +229,291 @@ def tabular_widths(font):
 	if offending:
 		return False, "Tabular widths differ:\n" + bulletList(details), offending
 	return True, "All %i tabular glyphs share one width per master." % len(tabularGlyphs), []
+
+
+VERTICAL_KEYS = (
+	"typoAscender", "typoDescender", "typoLineGap",
+	"winAscent", "winDescent",
+	"hheaAscender", "hheaDescender", "hheaLineGap",
+)
+
+
+@checker("vf_name_conflict")
+def vf_name_conflict(font):
+	statics = staticInstances(font)
+	variables = []
+	for instance in font.instances:
+		if getattr(instance, "type", 0) == 0:
+			continue
+		try:
+			if not instance.active:
+				continue
+		except AttributeError:
+			pass
+		variables.append(instance)
+	if not variables or not statics:
+		return True, "Statics and variable fonts don't ship together from this file — no conflict possible.", []
+	vfFamilyName = font.customParameters["Variable Font Family Name"]
+	if vfFamilyName:
+		return True, "Variable Font Family Name parameter is set: '%s'." % vfFamilyName, []
+	renamed = [v for v in variables if (v.familyName or "") and v.familyName != font.familyName]
+	if len(renamed) == len(variables):
+		return True, "All variable font settings carry their own family name.", []
+	return False, (
+		"Variable font exports share the family name '%s' with the statics — installations collide. "
+		"Give the VF its own family name (Variable Font Family Name parameter, or a familyName on the VF setting)."
+		% font.familyName
+	), []
+
+
+@checker("notdef_drawn")
+def notdef_drawn(font):
+	glyph = font.glyphs[".notdef"]
+	if glyph is None:
+		return False, "There is no .notdef glyph. Glyphs generates a fallback at export — draw your own if it should match the design.", []
+	empty = []
+	for master in font.masters:
+		layer = glyph.layers[master.id]
+		if layer is not None and not (layer.paths or layer.components):
+			empty.append(layer)
+	if empty:
+		return False, ".notdef exists but is empty in: %s." % ", ".join(layer.name for layer in empty), empty
+	return True, ".notdef is drawn in every master.", []
+
+
+@checker("contour_directions")
+def contour_directions(font):
+	offending = []
+	for glyph in font.glyphs:
+		if not glyph.export:
+			continue
+		for layer in glyph.layers:
+			if not (layer.isMasterLayer or layer.isSpecialLayer):
+				continue
+			if not layer.paths:
+				continue
+			copyLayer = layer.copy()
+			copyLayer.correctPathDirection()
+			# compare direction counts, not order — correcting may reorder paths
+			directions = sorted(path.direction for path in layer.paths)
+			corrected = sorted(path.direction for path in copyLayer.paths)
+			if directions != corrected:
+				offending.append(layer)
+	if offending:
+		names = ["%s (%s)" % (layer.parent.name, layer.name) for layer in offending]
+		return False, "%i layers have wrong path directions:\n%s\nPath > Correct Path Direction fixes them." % (len(offending), bulletList(names)), offending
+	return True, "All path directions are correct.", []
+
+
+@checker("uc_diacritics_clipping")
+def uc_diacritics_clipping(font):
+	offending = []
+	details = []
+	checkedAny = False
+	for master in font.masters:
+		top = master.customParameters["winAscent"]
+		bottom = master.customParameters["winDescent"]
+		if top is None and bottom is None:
+			continue
+		checkedAny = True
+		for glyph in font.glyphs:
+			if not glyph.export:
+				continue
+			layer = glyph.layers[master.id]
+			if layer is None:
+				continue
+			bounds = layer.bounds
+			if bounds.size.height == 0:
+				continue
+			layerTop = bounds.origin.y + bounds.size.height
+			layerBottom = bounds.origin.y
+			if top is not None and layerTop > float(top):
+				offending.append(layer)
+				details.append("%s (%s): top %g above winAscent %s" % (glyph.name, master.name, layerTop, top))
+			elif bottom is not None and layerBottom < -float(bottom):
+				offending.append(layer)
+				details.append("%s (%s): bottom %g below winDescent %s" % (glyph.name, master.name, layerBottom, bottom))
+	if not checkedAny:
+		return True, "No winAscent/winDescent parameters set — Glyphs computes safe values automatically, nothing can clip.", []
+	if offending:
+		return False, "Glyphs cross the clipping boundary:\n" + bulletList(details), offending
+	return True, "Nothing crosses the clipping boundary in any master.", []
+
+
+@checker("vm_across_masters")
+def vm_across_masters(font):
+	if len(font.masters) < 2:
+		return True, "Only one master — nothing to compare.", []
+	problems = []
+	for key in VERTICAL_KEYS:
+		values = {}
+		for master in font.masters:
+			value = master.customParameters[key]
+			values.setdefault(str(value), []).append(master.name)
+		if len(values) > 1:
+			problems.append("%s: %s" % (key, "; ".join(
+				"%s (%s)" % (value, ", ".join(names)) for value, names in values.items())))
+	if problems:
+		return False, "Vertical metrics differ between masters:\n" + bulletList(problems), []
+	return True, "All masters share identical vertical metrics parameters.", []
+
+
+@checker("linespacing_across_styles")
+def linespacing_across_styles(font):
+	fonts = list(Glyphs.fonts)
+	if len(fonts) < 2:
+		return False, "Only one font is open — open the rest of the family (e.g. the italic file) and run again.", []
+	problems = []
+	for key in VERTICAL_KEYS:
+		values = {}
+		for openFont in fonts:
+			value = openFont.masters[0].customParameters[key] if openFont.masters else None
+			values.setdefault(str(value), []).append(openFont.familyName or "?")
+		if len(values) > 1:
+			problems.append("%s: %s" % (key, "; ".join(
+				"%s (%s)" % (value, ", ".join(names)) for value, names in values.items())))
+	if problems:
+		return False, "The open fonts disagree on vertical metrics:\n" + bulletList(problems), []
+	return True, "All %i open fonts share the same vertical metrics parameters." % len(fonts), []
+
+
+@checker("anchor_consistency")
+def anchor_consistency(font):
+	offending = []
+	details = []
+	for glyph in font.glyphs:
+		if not glyph.export:
+			continue
+		info = glyph.glyphInfo
+		expected = list(info.anchors) if (info and info.anchors) else None
+		if not expected:
+			continue
+		for layer in glyph.layers:
+			if not layer.isMasterLayer:
+				continue
+			if layer.components and not layer.paths:
+				continue  # composites inherit anchors from their components
+			present = set(str(anchor.name) for anchor in layer.anchors)
+			missing = [name for name in expected if str(name) not in present]
+			if missing:
+				offending.append(layer)
+				details.append("%s (%s): missing %s" % (glyph.name, layer.name, ", ".join(str(m) for m in missing)))
+	if offending:
+		return False, "Layers missing expected anchors:\n" + bulletList(details), offending
+	return True, "All glyphs carry the anchors Glyphs expects.", []
+
+
+@checker("ligature_carets")
+def ligature_carets(font):
+	offending = []
+	details = []
+	for glyph in font.glyphs:
+		if not glyph.export or "_" not in glyph.name:
+			continue
+		base = glyph.name.split(".")[0]
+		parts = [part for part in base.split("_") if part]
+		if len(parts) < 2:
+			continue
+		needed = len(parts) - 1
+		for layer in glyph.layers:
+			if not layer.isMasterLayer:
+				continue
+			carets = [anchor for anchor in layer.anchors if str(anchor.name).startswith("caret")]
+			if len(carets) < needed:
+				offending.append(layer)
+				details.append("%s (%s): %i of %i caret anchors" % (glyph.name, layer.name, len(carets), needed))
+	if offending:
+		return False, "Ligatures missing caret anchors:\n" + bulletList(details), offending
+	return True, "All ligatures carry their caret anchors.", []
+
+
+@checker("ss_named")
+def ss_named(font):
+	ssFeatures = [feature for feature in font.features if re.match(r"ss\d\d$", str(feature.name))]
+	if not ssFeatures:
+		return True, "No stylistic sets in the font — nothing to name.", []
+	unnamed = []
+	for feature in ssFeatures:
+		labeled = False
+		try:
+			if feature.labels:
+				labeled = True
+		except AttributeError:
+			pass
+		if not labeled and "Name:" in (feature.notes or ""):
+			labeled = True
+		if not labeled:
+			unnamed.append(str(feature.name))
+	if unnamed:
+		return False, "Stylistic sets without a name: %s. Add names in Font Info > Features." % ", ".join(unnamed), []
+	return True, "All %i stylistic sets are named." % len(ssFeatures), []
+
+
+@checker("ss_coverage")
+def ss_coverage(font):
+	names = set(glyph.name for glyph in font.glyphs)
+	suffixes = sorted(set(
+		match.group(1) for name in names
+		for match in [re.search(r"\.(ss\d\d)$", name)] if match
+	))
+	if not suffixes:
+		return True, "No .ssXX glyphs in the font — nothing to cover.", []
+	missing = []
+	layers = []
+	masterId = font.masters[0].id
+	for suffix in suffixes:
+		bases = set(name[:-(len(suffix) + 1)] for name in names if name.endswith("." + suffix))
+		for glyph in font.glyphs:
+			if not glyph.export or glyph.name.endswith("." + suffix):
+				continue
+			layer = glyph.layers[masterId]
+			if layer is None or not layer.components:
+				continue
+			usedBases = [c.componentName for c in layer.components if c.componentName in bases]
+			if usedBases and ("%s.%s" % (glyph.name, suffix)) not in names:
+				missing.append("%s.%s (uses %s)" % (glyph.name, suffix, ", ".join(usedBases)))
+				layers.append(layer)
+	if missing:
+		return False, "Report — composites whose base has a stylistic variant but which lack their own:\n" + bulletList(missing), layers
+	return True, "Stylistic sets cover all related composites.", []
+
+
+SC_SUFFIXES = (".sc", ".smcp", ".c2sc")
+
+
+@checker("smallcaps_coverage")
+def smallcaps_coverage(font):
+	names = set(glyph.name for glyph in font.glyphs)
+	scSuffix = None
+	for suffix in SC_SUFFIXES:
+		if any(name.endswith(suffix) for name in names):
+			scSuffix = suffix
+			break
+	if scSuffix is None:
+		return True, "No small cap glyphs in the font — nothing to cover.", []
+	missing = []
+	layers = []
+	masterId = font.masters[0].id
+	for glyph in font.glyphs:
+		if not glyph.export or not glyph.unicode:
+			continue
+		try:
+			character = glyph.string
+		except AttributeError:
+			character = None
+		if not character or not character.isupper():
+			continue
+		candidates = ["%s%s" % (glyph.name, scSuffix)]
+		lowered = character.lower()
+		if len(lowered) == 1:
+			lowerGlyph = font.glyphs[lowered]
+			if lowerGlyph is not None:
+				candidates.append("%s%s" % (lowerGlyph.name, scSuffix))
+		if not any(candidate in names for candidate in candidates):
+			missing.append("%s (expected %s)" % (glyph.name, " or ".join(candidates)))
+			layer = glyph.layers[masterId]
+			if layer is not None:
+				layers.append(layer)
+	if missing:
+		return False, "Uppercase without small cap counterparts:\n" + bulletList(missing), layers
+	return True, "Every uppercase character has a small cap counterpart.", []

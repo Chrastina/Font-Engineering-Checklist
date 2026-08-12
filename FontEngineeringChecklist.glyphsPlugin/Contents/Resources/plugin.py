@@ -93,11 +93,22 @@ class FontEngineeringChecklist(GeneralPlugin):
 			return
 		if getattr(self, "w", None) is not None:
 			self.w.show()
-			self.w.getNSWindow().makeKeyAndOrderFront_(None)
+			self.makeWindowKey()
+			self.performSelector_withObject_afterDelay_("makeWindowKey", None, 0.1)
 			return
 		self.data = self.loadChecks()
 		self.editMode = False
 		self.buildWindow()
+
+	def makeWindowKey(self):
+		if getattr(self, "w", None) is None:
+			return
+		try:
+			panel = self.w.getNSWindow()
+			panel.setBecomesKeyOnlyIfNeeded_(False)
+			panel.makeKeyAndOrderFront_(None)
+		except Exception:
+			pass
 
 	# ---------------------------------------------------------------- window
 
@@ -135,8 +146,11 @@ class FontEngineeringChecklist(GeneralPlugin):
 		self.w.bind("resize", self.syncContentWidth)
 		self.w.open()
 		# Open as the key window right away — otherwise the panel draws in
-		# the inactive grey appearance until its title bar is clicked.
-		self.w.getNSWindow().makeKeyAndOrderFront_(None)
+		# the inactive grey appearance until its title bar is clicked. The
+		# delayed second call wins over whoever steals focus right after the
+		# menu action.
+		self.makeWindowKey()
+		self.performSelector_withObject_afterDelay_("makeWindowKey", None, 0.1)
 
 	@objc.python_method
 	def windowClosed(self, sender):
@@ -614,7 +628,6 @@ class FontEngineeringChecklist(GeneralPlugin):
 					self.popover.close()
 				except Exception:
 					pass
-			Glyphs.showNotification("Font Engineering Checklist", "✓ %s" % check["title"])
 		else:
 			if layers:
 				tab = font.newTab()
