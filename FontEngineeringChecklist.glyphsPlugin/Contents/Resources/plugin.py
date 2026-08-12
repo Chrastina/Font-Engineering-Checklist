@@ -524,16 +524,27 @@ class FontEngineeringChecklist(GeneralPlugin):
 		links = check.get("links", []) or []
 		run = check.get("run")
 
+		# One action only: the Open button when the tool is installed, the
+		# download link when it is not.
+		runAvailable = False
+		if run:
+			try:
+				runAvailable = self.toolAvailable(check)
+			except Exception:
+				runAvailable = False
+		if runAvailable:
+			links = []
+
 		width = 320
 		textHeight = max(34, (len(info) // 46 + info.count("\n") + 1) * 15 + 8)
-		height = 10 + 18 + textHeight + (24 if run else 0) + len(links) * 24 + 8
+		height = 10 + 18 + textHeight + (24 if runAvailable else 0) + len(links) * 24 + 8
 
 		self.popover = vanilla.Popover((width, height), behavior="transient")
 		self.popoverCheckId = checkId
 		self.popover.title = vanilla.TextBox((10, 8, -10, 16), title, sizeStyle="small")
 		self.popover.text = vanilla.TextBox((10, 28, -10, textHeight), info, sizeStyle="small")
 		y = 28 + textHeight + 2
-		if run:
+		if runAvailable:
 			self.popover.runButton = vanilla.Button(
 				(10, y, -10, 18), "▶ Open %s" % run.get("label", "tool"), sizeStyle="small",
 				callback=lambda sender, c=check: self.runToolClicked(c),
@@ -580,28 +591,52 @@ class FontEngineeringChecklist(GeneralPlugin):
 			)
 
 	@objc.python_method
+	def runNeedles(self, check):
+		matches = (check.get("run") or {}).get("match", [])
+		if isinstance(matches, str):
+			matches = [matches]
+		return [m.lower().replace(" ", "") for m in matches]
+
+	@objc.python_method
+	def findReporter(self, needles):
+		for reporter in Glyphs.reporters:
+			names = [reporter.__class__.__name__]
+			try:
+				names.append(str(reporter.title()))
+			except Exception:
+				pass
+			haystack = "".join(names).lower().replace(" ", "")
+			if any(needle in haystack for needle in needles):
+				return reporter
+		return None
+
+	@objc.python_method
+	def toolAvailable(self, check):
+		"""True when the recommended tool is installed in this Glyphs."""
+		run = check.get("run") or {}
+		needles = self.runNeedles(check)
+		if not needles:
+			return False
+		if run.get("type") == "reporter":
+			return self.findReporter(needles) is not None
+		if run.get("type") == "menu":
+			return self.findMenuItem(NSApp.mainMenu(), needles) is not None
+		return False
+
+	@objc.python_method
 	def runTool(self, check):
 		"""Opens the recommended tool directly: activates a reporter plugin or
 		triggers the script/plugin menu item. Returns False when not installed."""
 		run = check.get("run") or {}
-		matches = run.get("match", [])
-		if isinstance(matches, str):
-			matches = [matches]
-		needles = [m.lower().replace(" ", "") for m in matches]
+		needles = self.runNeedles(check)
 		if not needles:
 			return False
 		if run.get("type") == "reporter":
-			for reporter in Glyphs.reporters:
-				names = [reporter.__class__.__name__]
-				try:
-					names.append(str(reporter.title()))
-				except Exception:
-					pass
-				haystack = "".join(names).lower().replace(" ", "")
-				if any(needle in haystack for needle in needles):
-					Glyphs.activateReporter(reporter)
-					return True
-			return False
+			reporter = self.findReporter(needles)
+			if reporter is None:
+				return False
+			Glyphs.activateReporter(reporter)
+			return True
 		if run.get("type") == "menu":
 			item = self.findMenuItem(NSApp.mainMenu(), needles)
 			if item is None:
